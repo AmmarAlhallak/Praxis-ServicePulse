@@ -55,6 +55,7 @@ COLUMNS = {
     'rows':'Messpunkte', 'valid':'Gültige Messwerte', 'mean':'Durchschnitt', 'median':'Median',
     'minimum':'Minimum', 'maximum':'Maximum', 'time':'Zeitpunkt', 'n':'Gültige Messwerte',
     'window':'Zeitraum', 'model':'Gerätemodell', 'kind':'Dateiinhalt', 'columns':'Originalspalten',
+    'observed_hours':'Stunden mit gültigen Messpunkten',
     'path':'Dateipfad', 'category_raw':'Originalkategorie', 'reported_count':'Anzahl im Kontrollblatt',
     'calculated_count':'Selbst berechnete Anzahl', 'matches':'Übereinstimmung',
     'reference_date':'Servicedatum der Autoren', 'reference_fault':'Beschreibung der Autoren',

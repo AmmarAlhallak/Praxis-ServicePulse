@@ -39,7 +39,7 @@ Lizenzen, Geräteidentitätskonflikte und Abweichungen der Quellen: [Herkunft](d
 
 ## Funktionen
 
-Die überarbeitete deutsche Oberfläche gliedert sich in **Übersicht**, **Störungsanalyse**, **Temperatur & Betrieb**, **Datenqualität** und **Methodik & Quellen**. Originalwerte bleiben erhalten; deutsche Lesehilfen und aufklappbare Expertenansichten vereinfachen die Bedienung. [Bedienung und aktuelle Demo](docs/oberflaeche.md).
+Die deutsche Oberfläche gliedert sich in **Übersicht**, **Forschungsfrage & Ergebnisse**, **Störungsanalyse**, **Temperatur & Betrieb**, **Datenqualität** und **Methodik & Quellen**. Originalwerte bleiben erhalten; deutsche Lesehilfen und aufklappbare Expertenansichten vereinfachen die Bedienung. Standardfilter berücksichtigen alle Geräte/Kategorien und den gesamten Zeitraum, ohne lange Chiplisten. Die eigenständige Fallanalyse bietet die belegten Fälle 806279/28.06.2022, 806030/28.01.2015 und 806031/03.02.2023. [Professor-Demo und Prüfungen](docs/praxis_demo_03_11.md), [Anforderungsstand](docs/professor_anforderungen.md).
 
 Übersicht, Originalkategorien und zusammengefasste Kategorien, Geräteanalyse, zeitliche Verteilung, reale Temperatur-/Spannungsreihen, aggregierte Minima/Mittelwerte/Maxima, markierte Servicetage, begrenzte Geräteereignisabfragen mit Uhrkorrektur, messpunktgewichtete Vorher/Nachher-Statistik, Qualitätskontrolle, Quellenansicht, CSV-Export und Parquet-Upload. Messgerät kann unabhängig vom Servicefilter gewählt werden; markiert werden ausschließlich ausgewählte Serviceeinträge. Der Bitcode `State` bleibt in den Quelldaten erhalten und wird nicht als kontinuierliche Messgröße gemittelt.
 
@@ -53,6 +53,7 @@ servicepulse/
   faults.py                  Excel-Erkennung, Normalisierung, Filter, Kennzahlen
   presentation.py            deutsche Bezeichnungen und Diagrammdarstellung
   imports.py                 geprüfter Import ohne Überschreiben
+  research.py                Filterzustand, Falltexte, Prüfprotokoll-Aktualität
   measurements.py            Parquet-Metadaten, DuckDB-Fensterabfragen, Uhrenoffsets
   raw.py                     eigene kontrollierte Rohdatenleser
   storage.py                 DuckDB-Tabellen und SQL-Views

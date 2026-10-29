@@ -66,6 +66,12 @@ Die Publikation nennt 42 gelabelte Einträge nach vier Fällen ohne Daten. Die e
 
 Demo-Beispiel 806279, 28.06.2022: RTD-Vorherfenster 21.–27.06. umfasst 2.869 Messpunkte mit Mittelwert −64,01 °C, Nachherfenster 29.06.–05.07. 10.075 Punkte mit Mittelwert −79,90 °C. Dies ist ein beschreibender Unterschied bei ungleicher Abdeckung; daraus folgt keine Schätzung der Reparaturwirkung und keine gesicherte Erkennung des Fehlerbeginns.
 
+Ergänzende direkte Fallabfragen: Vorher Minimum −80,7 °C und Maximum 21,8 °C, nachher Minimum −81,2 °C und Maximum −65,7 °C. Von 168 Stunden des Vorherfensters enthalten 49 mindestens einen gültigen RTD-Wert, 119 keinen; nachher sind alle 168 Stunden zumindest punktuell beobachtet. Der Servicetag selbst hat 1.440 gültige Punkte in 24 Stunden. Eine Stunde mit einem Punkt ist ausdrücklich keine lückenlos beobachtete Betriebsstunde. Auch im Nachherfenster fehlen gegenüber einer idealen durchgängigen Minutenreihe einzelne Messpunkte.
+
+Zweiter auswählbarer Fall: 806030, 28.01.2015. Am Servicetag liegen 24 gültige RTD-Werte in zwei Stunden vor; in beiden angrenzenden Siebentagefenstern jeweils null. Mittelwert, Minimum und Maximum dieser leeren Fenster bleiben fehlend. Ein Vorher-Nachher-Unterschied ist nicht berechenbar. Dieser Fall veranschaulicht, weshalb ein Servicetag mit Messpunkten keine ausreichende Vergleichsabdeckung garantiert.
+
+Dritter auswählbarer Fall: 806031, Excel-Datum 03.02.2023. Die Abweichung zum 02.03.2023 der Autorenliste und zum bereits geprüften Auftragsdatum ist dokumentiert. Kurven werden weiter am unveränderten Excel-Tag gezeigt und mit einem Widerspruchshinweis versehen; es wird kein fachlich gesicherter Ersatztermin eingesetzt.
+
 ## Quellenkonflikte und Grenzen
 
 Drei Excel-Einträge widersprechen der Autoren-CSV hinsichtlich Datum oder Fehlertext: 806030 am 30.08.2022, 806031 am 03.02.2023 und 808783 am 14.09.2021. Die gezielte Serviceberichtprüfung und zwei Rohdatenstichproben sind in [repository_pruefung.md](repository_pruefung.md) dokumentiert. Besonders kritisch: Unit-Name-Konflikt 806018/806022 und Positionsjoin bei Haier. Unveränderte Parquets sind Autorenprodukte, keine vollständig unabhängig rekonstruierte Wahrheit.

@@ -65,10 +65,10 @@ def test_numeric_measurements_exclude_event_lists(tmp_path):
     pd.DataFrame({'Datetime':pd.to_datetime(['2022-01-01']),'RTD':[-80.], 'Type':[[3,5]], 'State':[3]}).to_parquet(path,index=False)
     assert numeric_columns(path)==['RTD']
 
-def test_five_german_sections_and_preserved_metrics():
+def test_german_sections_and_preserved_metrics():
     app=AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
     assert not app.exception and not app.error
-    assert [tab.label for tab in app.tabs]==['Übersicht','Störungsanalyse','Temperatur & Betrieb','Datenqualität','Methodik & Quellen']
+    assert [tab.label for tab in app.tabs]==['Übersicht','Forschungsfrage & Ergebnisse','Störungsanalyse','Temperatur & Betrieb','Datenqualität','Methodik & Quellen']
     assert [metric.value for metric in app.metric[:4]]==['46','24','11','5']
     assert 'Kältemittelleckage' in app.multiselect(key='categories').format_func('Refrigerant leakage')
     assert any(expander.label.startswith('Erweiterte Funktion') for expander in app.expander)

@@ -34,9 +34,13 @@ def test_real_parquet_sql_against_independent_pandas_aggregation():
 
 def test_combined_dashboard_filters_device_analysis_charts_and_reset():
     app = AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
+    app.checkbox(key='all_devices').uncheck()
+    app.checkbox(key='all_categories').uncheck()
+    app.checkbox(key='limit_service_dates').check().run()
     app.multiselect(key='devices').set_value(['806279'])
     app.multiselect(key='categories').set_value(['Refrigerant leakage'])
-    app.date_input(key='date_range').set_value((date(2022,6,28),date(2022,6,28)))
+    app.date_input(key='service_start').set_value(date(2022,6,28))
+    app.date_input(key='service_end').set_value(date(2022,6,28))
     app.run()
     assert not app.exception and not app.error
     assert [metric.value for metric in app.metric[:4]] == ['1','1','0','0']

@@ -1,5 +1,19 @@
 # Projektstatus ServicePulse
 
+## Ergänzung: Forschungsfrage, Filter und geführte Fälle am 29.10.2026
+
+Der zuvor nur lokale deutsche UI-Stand wurde **vor** dieser Weiterentwicklung in Commit `1c40d9a` gesichert. Es wurde keine ältere GitHub-Version übernommen. Forschungsfrage, Datenquellen, Methode, Zielgrößen, Kontrollen, berechnete Ergebnisse, Grenzen und offene Fragen sind jetzt im eigenen Dashboard-Bereich sichtbar.
+
+Die Servicefilter starten mit allen Geräten und Kategorien sowie dem gesamten Zeitraum, ohne vorausgewählte Chiplisten. Zwei skalare Datumsfelder und eine explizite Zeitraumbegrenzung ersetzen den unvollständig gespeicherten Datumsbereich. Ungültige/unvollständige aktivierte Zeiträume wählen keine Einträge aus und erklären den Grund; ein alter Range-Zustand beeinflusst die neue Auswahl nicht. Aktive Filter werden stets angezeigt. Die Messfallanalyse hat eine eigene Auswahl mit optionaler Kopplung an die Servicefilter.
+
+Drei belegte Fälle sind direkt auswählbar. Zusätzlich zu den unveränderten Mittelwerten werden Minima/Maxima und tatsächlich beobachtete Stunden vor, am und nach dem Servicetag abgefragt. 806279/28.06.2022: 2.869/1.440/10.075 Messpunkte; 49/24/168 Stunden mit mindestens einem gültigen Punkt. 806030/28.01.2015: 0/24/0 Punkte und keine berechenbaren Vorher-/Nachher-Mittelwerte. Der Quellenwiderspruch 806031/03.02.2023 bleibt ausdrücklich ungeklärt. Es werden keine Ausfallraten oder Reparaturwirkungen abgeleitet.
+
+**35 automatisierte Tests bestanden** im vollständigen lokalen Bestand. Der schreibgeschützte Datenabgleich meldet weiterhin 46/24/11/5 und 106 Parquet-Dateien ohne Abweichung. Die vorhandenen Forschungsdaten wurden nicht erneut heruntergeladen. Für den laufenden Browser musste der Server nach einer Modulergänzung neu gestartet werden; reine Tests in frischen Prozessen ersetzen diesen Browsercheck nicht.
+
+Nach dem Serverneustart im echten Browser geprüft: vollständige Standardfilter ohne Enddatumswarnung, Forschungsübersicht mit aktuellen Prüfnachweisen sowie alle drei direkt auswählbaren Fälle einschließlich Messlücke und Datumswarnung. Belege: [Fallanalyse](praxis_fallanalyse.png), [Messabdeckung und Einordnung](praxis_messabdeckung.png). Zusätzlich wurde eine Kopie der Projektquellen ohne lokale Daten und Datenbank getestet: 29 Tests bestanden, 6 datenabhängige Tests übersprungen (12,47 Sekunden). Das ersetzt nicht den vollständigen lokalen Lauf mit 35 bestandenen Tests (30,73 Sekunden).
+
+Vorführung und fachlicher Stand: [praxis_demo_03_11.md](praxis_demo_03_11.md), [professor_anforderungen.md](professor_anforderungen.md). Die folgenden Abschnitte dokumentieren frühere Entwicklungsstände und deren damalige Testzahlen.
+
 ## Ergänzung: deutsche Benutzeroberfläche am 29.10.2026
 
 Die vorhandene App wurde in fünf Bereiche gegliedert: Übersicht, Störungsanalyse, Temperatur & Betrieb, Datenqualität sowie Methodik & Quellen. Deutsche Kategorien, Messgrößen, Tabellenbezeichnungen, Datumsformate, Einheiten und Diagrammlegenden liegen in einer eigenen Darstellungsschicht. Originalwerte bleiben erhalten; der Serviceexport ergänzt deutsche Lesehilfen. Dateipfade, Rohmeldungen und vollständige Prüftabellen sind als Expertenansichten verfügbar. Der validierende Import wurde in ein separat testbares Modul ausgelagert und überschreibt keine vorhandenen Dateien.

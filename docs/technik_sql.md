@@ -13,6 +13,7 @@ SQLite wird ausschließlich durch `sqlite3` aus der Python-Standardbibliothek in
 | `app.py` | Streamlit-Oberfläche, Geräte-/Kategorie-/Datumsfilter, Kennzahlen, Plotly-Diagramme, Geräteanalyse, CSV-Export, Import und Quellenhinweise. Einstieg immer über `python -m streamlit run app.py` |
 | `servicepulse/presentation.py` | deutsche Kategorien, Messgrößen, Einheiten und Tabellenbezeichnungen; Diagramme und CSV-Lesehilfen auf Kopien ohne Änderung der Originaldaten |
 | `servicepulse/imports.py` | lokaler Parquet-Import mit Dateinamen-/Schema-/Größenprüfung und exklusiver Dateierstellung zum Schutz vorhandener Dateien |
+| `servicepulse/research.py` | klarer Servicefilterzustand, belegte Falltexte, stündliche Abdeckungsübersicht und Aktualitätsprüfung lokaler Nachweise |
 | `servicepulse/faults.py` | passendes Excel-Blatt erkennen, Originalspalten erhalten, ID/Datum/Kategorie normalisieren, Quellzeilen mitführen, filtern, Kennzahlen und Qualität berechnen, Kontrollblatt und Autoren-CSV vergleichen |
 | `servicepulse/measurements.py` | Dateischema/ID/Zeilenanzahl prüfen, Messdateien inventarisieren, verfügbare numerische Messgrößen ermitteln, Zeitgrenzen abfragen, SQL-Fensteraggregate, Geräteereignisse, Uhrenoffsets und Vollprüfung pro Datei |
 | `servicepulse/storage.py` | kleine Tabellen in DuckDB speichern und zwei SQL-Views definieren |
@@ -114,3 +115,5 @@ Dabei zieht Python den Uhrenoffset von den Fenstergrenzen ab und addiert ihn ans
 Die Qualitätsprüfung zählt fehlende und wiederholte Zeitstempel und ermittelt RTD-Grenzen. Eine weitere Abfrage verwendet `lag("Datetime") OVER (ORDER BY "Datetime")`, um Messlücken zu bestimmen. Die konkreten ausführbaren Fassungen stehen vollständig in `audit_file`.
 
 Die einzige SQLite-Nutzung liest `SELECT * FROM EACH_POINT_DATA_CHANGE` und `SELECT TIME, TEMPERATURE FROM TEMPER_RECORD` aus der Originaldatei. Die anschließende RTD-Zuordnung erfolgt mit einem expliziten Zeitjoin in pandas; es werden keine ServicePulse-Tabellen in SQLite geschrieben.
+
+Ergänzung der geführten Fallanalyse: `window_comparison` behält die bestehenden Mittelwerte, Mediane und Stichprobenzahlen bei und liefert zusätzlich `min`, `max` und `count(DISTINCT date_trunc('hour', "Datetime")) FILTER (WHERE Messspalte IS NOT NULL)`. `serviceday_summary` fragt dieselben grundlegenden Größen separat für den Kalendertag ab. Die Differenz zwischen den 24 × Tagen des Fensters und der Zahl beobachteter Stunden zählt leere Stundenintervalle; sie ist kein prozentualer Nachweis lückenloser Aufzeichnung. Die Rohdaten und bisherigen SQL-Views bleiben unverändert.

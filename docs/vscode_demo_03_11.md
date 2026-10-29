@@ -1,5 +1,7 @@
 # Technische Kurzvorführung in VS Code am 03.11.2026
 
+Für die aktuelle fünf- bis siebenminütige Vorführung mit den neuen Fallbuttons siehe [Praxis-Demo](praxis_demo_03_11.md). Die technischen Startschritte unten gelten weiterhin.
+
 Termin laut Vorgabe: 10:30 Uhr in C7-15. Diese Anleitung ergänzt den fachlichen [Demo-Leitfaden](demo_03_11.md).
 
 ## Vorher, etwa zwei Minuten

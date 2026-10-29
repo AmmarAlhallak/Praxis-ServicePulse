@@ -83,11 +83,25 @@ def window_comparison(path, column, date, days=7):
         for label, start, end in [('Vorher', date-pd.Timedelta(days=days), date),
                                   ('Nachher', date+pd.Timedelta(days=1), date+pd.Timedelta(days=days+1))]:
             row = con.execute(f'''SELECT count(*) AS rows, count({col}) AS valid,
-              avg({col}) AS mean, median({col}) AS median, min("Datetime") AS first_time,
+              avg({col}) AS mean, median({col}) AS median,
+              min({col}) AS minimum, max({col}) AS maximum,
+              count(DISTINCT date_trunc('hour', "Datetime")) FILTER (WHERE {col} IS NOT NULL) AS observed_hours,
+              min("Datetime") AS first_time,
               max("Datetime") AS last_time FROM read_parquet(?) WHERE "Datetime" >= ? AND "Datetime" < ?''',
               [str(path), start.to_pydatetime(), end.to_pydatetime()]).df()
             row.insert(0,'window',label); rows.append(row)
     return pd.concat(rows, ignore_index=True)
+
+def serviceday_summary(path, column, date):
+    if column not in numeric_columns(path):
+        raise ValueError('Unbekannte Messgröße')
+    date=pd.Timestamp(date).normalize();col=quote_identifier(column)
+    with duckdb.connect() as con:
+        return con.execute(f'''SELECT count(*) AS rows, count({col}) AS valid,
+          avg({col}) AS mean, min({col}) AS minimum, max({col}) AS maximum,
+          count(DISTINCT date_trunc('hour', "Datetime")) FILTER (WHERE {col} IS NOT NULL) AS observed_hours
+          FROM read_parquet(?) WHERE "Datetime" >= ? AND "Datetime" < ?''',
+          [str(path),date.to_pydatetime(),(date+pd.Timedelta(days=1)).to_pydatetime()]).df().iloc[0]
 
 def audit_file(path):
     """Vollständige Zeit-/RTD-Prüfung einer Datei, ohne Messdaten zu persistieren."""

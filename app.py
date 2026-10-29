@@ -1,12 +1,14 @@
 """ServicePulse: deutsche Darstellung auf unveränderten Forschungsdaten."""
 from pathlib import Path
+import json
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 from servicepulse.faults import read_faults, metrics, quality, filter_faults, compare_reference, category_control
-from servicepulse.measurements import inventory, numeric_columns, series_window, window_comparison, event_window, offsets, time_bounds
+from servicepulse.measurements import inventory, numeric_columns, series_window, window_comparison, event_window, offsets, time_bounds, serviceday_summary
 from servicepulse.presentation import category_label, fault_label, measure_label, unit, german_number, display_frame, faults_export, style_figure, counts_figure, measurement_figure
 from servicepulse.imports import import_parquet
+from servicepulse.research import QUESTION, DEMO_CASES, apply_service_selection, case_observation, coverage_rows, inputs_fingerprint, read_test_report
 
 ROOT = Path(__file__).resolve().parent
 CHART_CONFIG = {'displayModeBar': False, 'responsive': True, 'displaylogo': False}
@@ -64,24 +66,46 @@ files,file_errors = inventory(ROOT/'data/raw')
 reference = ROOT/'research/reference/data/raw_data/other_data/freezer_faults.csv'
 compared = compare_reference(df,reference) if reference.exists() else None
 conflicts = compared[compared.reference_status.ne('Übereinstimmung')] if compared is not None else None
+if st.session_state.get('service_filter_version') != 2:
+    for old_key in ['devices','categories','date_range','all_devices','all_categories','limit_service_dates','service_start','service_end']:
+        st.session_state.pop(old_key,None)
+    st.session_state['service_filter_version']=2
+
+def choose_demo(code):
+    selected_device,selected_date,_=DEMO_CASES[code]
+    matching=df[df.device_id.eq(selected_device)&df.event_date.eq(pd.Timestamp(selected_date))]
+    if matching.empty:
+        return
+    st.session_state['measurement_device']=selected_device
+    st.session_state[f'service_day_{selected_device}']=matching.index[0]
+    st.session_state[f'measure_{selected_device}']='RTD'
+    st.session_state['comparison_days']=7
+    st.session_state['period_mode']='Rund um einen Servicetag'
+    st.session_state['link_service_filters']=False
 
 with st.sidebar:
     st.markdown('### ❄ ServicePulse')
     st.caption('Historische Daten · lokale Analyse')
     st.subheader('Serviceauswahl')
-    st.caption('Diese Filter gelten für Serviceeinträge und die Markierungen im Messverlauf. Das Messgerät wählst du im Bereich „Temperatur & Betrieb“.')
+    st.caption('Diese Filter gelten für Übersicht, Störungsanalyse und Serviceexport. „Temperatur & Betrieb“ hat eine eigene Fall- und Zeitraumwahl; eine Verknüpfung ist dort optional möglich.')
     if st.button('Alle Filter zurücksetzen',width='stretch'):
-        for key in ['devices','categories','date_range','include_undated']:
+        for key in ['devices','categories','date_range','include_undated','all_devices','all_categories','limit_service_dates','service_start','service_end']:
             st.session_state.pop(key,None)
         st.rerun()
     with st.expander('Geräte auswählen'):
         device_options = sorted(df.device_id.dropna().unique())
-        devices=st.multiselect('Geräte-ID',device_options,default=device_options,key='devices',help='Die Geräte-ID ist die sechsstellige Kennung eines Kühlgeräts. Eine leere Auswahl zeigt keine Einträge.')
+        all_devices=st.checkbox('Alle Geräte berücksichtigen',value=True,key='all_devices')
+        device_selection=st.multiselect('Geräte-ID suchen',device_options,default=[],key='devices',disabled=all_devices,placeholder='Geräte-ID eingeben oder auswählen',help='Für einzelne Geräte das Häkchen bei „Alle Geräte“ entfernen. Die Auswahl ist durchsuchbar. Eine dann leere Auswahl zeigt keine Einträge.')
+        devices=None if all_devices else device_selection
     with st.expander('Fehlerkategorien auswählen'):
         category_options=sorted(df.category.unique(),key=category_label)
-        categories=st.multiselect('Fehlerkategorie',category_options,default=category_options,format_func=category_label,key='categories',help='Die deutschen Namen sind Anzeigeübersetzungen. Originalkategorien bleiben unverändert erhalten.')
+        all_categories=st.checkbox('Alle Kategorien berücksichtigen',value=True,key='all_categories')
+        category_selection=st.multiselect('Fehlerkategorie suchen',category_options,default=[],format_func=category_label,key='categories',disabled=all_categories,placeholder='Kategorie eingeben oder auswählen',help='Die deutschen Namen sind Anzeigeübersetzungen. Originalkategorien bleiben unverändert erhalten.')
+        categories=None if all_categories else category_selection
     dates=df.event_date.dropna()
-    date_range=st.date_input('Servicedatum von – bis',(dates.min().date(),dates.max().date()),format='DD.MM.YYYY',key='date_range') if len(dates) else ()
+    limit_dates=st.checkbox('Servicezeitraum eingrenzen',value=False,key='limit_service_dates')
+    start_date=st.date_input('Servicedatum ab',dates.min().date() if len(dates) else None,format='DD.MM.YYYY',key='service_start',disabled=not limit_dates)
+    end_date=st.date_input('Servicedatum bis',dates.max().date() if len(dates) else None,format='DD.MM.YYYY',key='service_end',disabled=not limit_dates)
     include_undated=st.checkbox('Einträge ohne gültiges Datum einbeziehen',value=True,key='include_undated')
     st.divider()
     st.caption(f'{len(df)} Serviceeinträge · {df.loc[df.device_valid,"device_id"].nunique()} betroffene Geräte\n\n{len(files)} verfügbare Messdateien')
@@ -96,12 +120,15 @@ with st.sidebar:
 
 **Messabdeckung:** zeigt, ob und wie viele Messpunkte in einem Zeitfenster vorliegen. Einzelne Punkte belegen keine lückenlose Aufzeichnung.''')
 
-filtered=filter_faults(df,devices,categories)
-if len(date_range)==2:
-    selected_dates=filter_faults(filtered,start=date_range[0],end=date_range[1])
-    filtered=pd.concat([selected_dates,filtered[filtered.event_date.isna()]]) if include_undated else selected_dates
-elif len(date_range)==1:
-    st.info('Bitte noch das Enddatum auswählen. Bis dahin wird der Zeitraum nicht eingeschränkt.')
+filtered,filter_problem=apply_service_selection(df,devices,categories,limit_dates,start_date,end_date,include_undated)
+if filter_problem:
+    st.warning(filter_problem)
+device_summary=f'alle {len(device_options)}' if all_devices else ', '.join(devices) if devices else 'keine'
+category_summary=f'alle {len(category_options)}' if all_categories else ', '.join(map(category_label,categories)) if categories else 'keine'
+period_summary='gesamter dokumentierter Zeitraum' if not limit_dates else f'{start_date:%d.%m.%Y} – {end_date:%d.%m.%Y}' if start_date and end_date and not filter_problem else 'ungültig / unvollständig'
+active_summary=f'Aktive Servicefilter · Geräte: {device_summary} · Kategorien: {category_summary} · Zeitraum: {period_summary} · Einträge ohne Datum: {"einbezogen" if include_undated else "ausgeschlossen"}'
+with st.sidebar:
+    st.info(active_summary)
 m=metrics(filtered)
 metric_items=[('Serviceeinträge',m['entries'],'Dokumentierte Einträge in der aktuellen Auswahl. Ein Eintrag kann mehrere Komponenten betreffen.'),
               ('Betroffene Geräte',m['devices'],'Unterschiedliche gültige Geräte-IDs mit mindestens einem ausgewählten Eintrag.'),
@@ -110,7 +137,8 @@ metric_items=[('Serviceeinträge',m['entries'],'Dokumentierte Einträge in der a
 for column,(label,value,help_text) in zip(st.columns(4),metric_items):
     column.metric(label,value,help=help_text)
 st.caption(f'Aktuelle Serviceauswahl: {len(filtered)} von {len(df)} Einträgen. Mehrere Einträge können denselben ungelösten Zustand beschreiben.')
-overview,analysis,operation,data_quality,method=st.tabs(['Übersicht','Störungsanalyse','Temperatur & Betrieb','Datenqualität','Methodik & Quellen'])
+st.caption(active_summary)
+overview,research,analysis,operation,data_quality,method=st.tabs(['Übersicht','Forschungsfrage & Ergebnisse','Störungsanalyse','Temperatur & Betrieb','Datenqualität','Methodik & Quellen'])
 
 with overview:
     st.subheader('Welche Serviceanlässe sind dokumentiert?')
@@ -138,9 +166,14 @@ with analysis:
         st.subheader('Fehlerkategorien vergleichen')
         grouped=st.toggle('Einträge ohne Behebung mit der Hauptkategorie zusammenfassen',value=False,key='group_categories',help='Ändert nur dieses Diagramm. Originalkategorien und Kennzahlen bleiben unverändert.')
         show_counts(filtered,'category_group' if grouped else 'category','Fehlerkategorie','fault_categories')
+        st.caption('Dargestellt sind dokumentierte Serviceeinträge nach Autorenkategorie. Häufigere Meldungen belegen weder eine höhere Ausfallwahrscheinlichkeit noch unabhängige Defekte. Die Abgrenzung einzelner Serviceepisoden bleibt offen.')
     with right:
         st.subheader('Einträge nach Geräten')
         show_counts(filtered,'device_id','Geräte-ID','device_counts')
+        if not filtered.empty:
+            counts=filtered.device_id.value_counts()
+            st.write(f'Beispiel aus der Auswahl: Gerät {counts.index[0]} hat {int(counts.iloc[0])} dokumentierte Einträge.')
+        st.caption('Die Beobachtungsdauern und Messlücken unterscheiden sich je Gerät. Diese Rohhäufigkeiten sind keine Ausfallraten und kein fairer Zuverlässigkeitsrang. Vergleichbare Betriebszeiten und Serviceepisoden müssen dafür erst definiert werden.')
     st.subheader('Mehrere Einträge derselben Kategorie')
     repeated=filtered.groupby(['device_id','category']).size().reset_index(name='Serviceeinträge')
     repeated=repeated[repeated.Serviceeinträge>1]
@@ -155,44 +188,52 @@ with analysis:
         figure.update_traces(hovertemplate='%{x|%m.%Y}<br>Serviceeinträge: %{y}<extra></extra>')
         figure.update_xaxes(tickformat='%m.%Y')
         chart(style_figure(figure,300),'service_timeline')
+        peak=timeline.loc[timeline.Serviceeinträge.idxmax()]
+        st.write(f'Ein Monat mit der höchsten Eintragszahl in dieser Auswahl ist {peak["Monat"]:%m.%Y} mit {int(peak.Serviceeinträge)} Einträgen. Daraus folgt kein saisonales Ausfallmuster; Beobachtungsumfang und Berichtspraxis können sich unterscheiden.')
     st.caption('Registrierungsdaten haben Tagesauflösung. Ein Registrierungsdatum beschreibt nicht den nachgewiesenen Beginn eines Defekts.')
 
 with operation:
     st.subheader('Den Servicetag im Betrieb betrachten')
-    st.write('Wähle ein Gerät und einen dokumentierten Servicetag. Die Kurve zeigt echte Messwerte; leere Zeitabschnitte bleiben sichtbar.')
+    st.write('Die Fallanalyse hat eine eigene Geräte-, Service- und Zeitraumwahl. Die Servicefilter links verändern diesen Untersuchungsfall standardmäßig nicht.')
     temperatures=files[files.kind.eq('temp')]
+    for area,(code,(example_device,example_date,example_label)) in zip(st.columns(3),DEMO_CASES.items()):
+        available=not df[df.device_id.eq(example_device)&df.event_date.eq(pd.Timestamp(example_date))].empty and example_device in set(temperatures.device_id)
+        area.button(f'Beispiel: {example_label}',key=f'demo_{code}',on_click=choose_demo,args=(code,),disabled=not available,width='stretch',help=f'Gerät {example_device}, {pd.Timestamp(example_date):%d.%m.%Y}, Kammertemperatur und sieben Tage je Vergleichsfenster. Verwendet die gesamte Servicequelle, ohne die Servicefilter links zu ändern.')
     if temperatures.empty:
         st.info('Keine lesbaren Betriebsmessdateien vorhanden. Die Serviceanalyse funktioniert mit Excel weiter. Messdateien lassen sich nach der Importanleitung ergänzen.')
     else:
         options=sorted(temperatures.device_id.unique())
         preferred='806279' if '806279' in options else options[0]
-        a,b=st.columns(2)
-        device=a.selectbox('1 · Gerät auswählen',options,index=options.index(preferred),key='measurement_device',help='Die Geräte-ID bleibt die eindeutige Kennung. Hier sind alle Geräte mit Messdaten verfügbar, auch ohne Serviceeintrag.')
+        device=st.selectbox('1 · Gerät auswählen',options,index=options.index(preferred),key='measurement_device',help='Die Geräte-ID bleibt die eindeutige Kennung. Hier sind alle Geräte mit Messdaten verfügbar, auch ohne Serviceeintrag.')
         matches=temperatures[temperatures.device_id.eq(device)]
         with st.expander('Expertenansicht · Messdatei und Originalfelder'):
             selected_path=st.selectbox('Messdatei auswählen',matches.path.tolist(),format_func=lambda p:Path(p).name,key=f'measurement_file_{device}')
             st.code(selected_path,language=None)
             st.caption('Veröffentlichte Temperaturdaten sind bereits nach Autorenmethode zeitkorrigiert. Originalfelder und Bitcodes bleiben in der Datei erhalten.')
+            linked=st.checkbox('Servicefilter links auch auf Fallliste und Markierungen anwenden',value=False,key='link_service_filters')
         path=Path(selected_path)
         numeric=numeric_columns(path)
-        measure=b.selectbox('2 · Messgröße auswählen',numeric,index=numeric.index('RTD') if 'RTD' in numeric else 0,format_func=measure_label,key=f'measure_{device}')
-        st.caption('RTD ist der Widerstandstemperatursensor in der Kühlkammer. Er misst lokal und beschreibt nicht zwingend die Temperatur an jedem Ort der Kammer.')
-        candidates=filtered[filtered.device_id.eq(device)&filtered.event_date.notna()]
-        mode=st.radio('3 · Zeitraum wählen',['Rund um einen Servicetag','Freier Zeitraum'],horizontal=True,key='period_mode')
+        case_source=filtered if linked else df
+        candidates=case_source[case_source.device_id.eq(device)&case_source.event_date.notna()]
+        st.caption('Fallliste: aktive Serviceauswahl.' if linked else 'Fallliste: alle dokumentierten Serviceeinträge dieses Geräts. Der nachfolgende Messzeitraum ist unabhängig vom Servicezeitraum links.')
+        mode=st.radio('Untersuchungsart',['Rund um einen Servicetag','Freier Zeitraum'],horizontal=True,key='period_mode')
         chosen_date=None
         if mode=='Rund um einen Servicetag' and not candidates.empty:
             indices=candidates.index.tolist()
             leak_ids=candidates[candidates.category.eq('Refrigerant leakage')].index.tolist()
-            row_id=st.selectbox('Dokumentierter Servicetag',indices,index=indices.index(leak_ids[0]) if leak_ids else 0,format_func=lambda i:f'{df.loc[i,"event_date"]:%d.%m.%Y} · {category_label(df.loc[i,"category"])}',key=f'service_day_{device}')
+            row_id=st.selectbox('2 · Dokumentierten Serviceeintrag auswählen',indices,index=indices.index(leak_ids[0]) if leak_ids else 0,format_func=lambda i:f'{df.loc[i,"event_date"]:%d.%m.%Y} · {category_label(df.loc[i,"category"])}',key=f'service_day_{device}')
             chosen_date=df.loc[row_id,'event_date']
             st.caption(f'Dokumentierter Anlass: {fault_label(df.loc[row_id,"fault_text"])} · Geräte-ID {device}')
+            st.caption(f'Quelle: {df.loc[row_id,"source_file"]}, Excel-Zeile {int(df.loc[row_id,"source_row"])}. Originalfelder und englische Beschreibung bleiben im Serviceexport erhalten.')
+            measure=st.selectbox('3 · Messgröße wählen',numeric,index=numeric.index('RTD') if 'RTD' in numeric else 0,format_func=measure_label,key=f'measure_{device}')
             days=st.slider('Tage vor und nach dem Servicetag',1,30,7,key='comparison_days')
             start,end=chosen_date-pd.Timedelta(days=days),chosen_date+pd.Timedelta(days=days+1)
             if device=='806031' and chosen_date==pd.Timestamp('2023-02-03'):
                 st.warning('Datumswiderspruch: Excel nennt den 03.02.2023, Autorenliste und Auftragsdatum im Bericht den 02.03.2023. Das Excel-Datum wurde nicht automatisch verändert.')
         else:
             if mode=='Rund um einen Servicetag':
-                st.info('Kein Serviceeintrag für dieses Gerät in der aktuellen Serviceauswahl. Du kannst trotzdem einen freien Messzeitraum betrachten.')
+                st.info('Kein Serviceeintrag für dieses Gerät in der gewählten Fallliste. Du kannst trotzdem einen freien Messzeitraum betrachten.')
+            measure=st.selectbox('3 · Messgröße wählen',numeric,index=numeric.index('RTD') if 'RTD' in numeric else 0,format_func=measure_label,key=f'measure_{device}')
             first,last=time_bounds(path)
             last_day=pd.Timestamp(last).normalize() if last is not None else pd.Timestamp('2023-04-01')
             first_day=max(pd.Timestamp(first).normalize(),last_day-pd.Timedelta(days=6)) if first is not None else last_day
@@ -203,8 +244,9 @@ with operation:
                 st.info('Bitte Anfang und Ende auswählen. Bei einem gewählten Datum wird zunächst dieser einzelne Tag angezeigt.')
         if device=='806018':
             st.warning('Gerätezuordnung ungeklärt: Eine Rohdatei im Geräteordner 806018 nennt die Kennung 806022. Die Zuordnung der Autoren bleibt erhalten, ist aber fachlich noch zu klären.')
+        st.caption('RTD ist der Widerstandstemperatursensor in der Kühlkammer. Er misst lokal und beschreibt nicht zwingend die Temperatur an jedem Ort der Kammer.')
         bucket=st.selectbox('Werte zusammenfassen pro', ['hour','day','minute'],format_func=lambda value:{'hour':'Stunde','day':'Tag','minute':'Minute'}[value],key='aggregation',help='Jedes Intervall zeigt den Durchschnitt sowie den kleinsten und größten beobachteten Messwert. Es wird nicht über Messlücken interpoliert.')
-        st.markdown(f'#### {measure_label(measure)} · Gerät {device}')
+        st.markdown(f'#### 4 · Messverlauf: {measure_label(measure)} · Gerät {device}')
         st.caption(f'Zeitraum: {start:%d.%m.%Y} bis {(end-pd.Timedelta(days=1)):%d.%m.%Y}')
         if (end-start).days>366 and bucket=='minute':
             st.warning('Bitte für die Minutenansicht höchstens 366 Tage auswählen oder auf Stunden bzw. Tage umstellen.')
@@ -221,16 +263,24 @@ with operation:
                 st.info('Die farbige Fläche markiert den dokumentierten Servicetag – keinen nachgewiesenen Fehlerbeginn. Ein Unterschied vor und nach diesem Tag beweist keine Reparaturwirkung.')
                 if chosen_date is not None:
                     comparison=window_comparison(path,measure,chosen_date,days)
-                    st.subheader('Vor und nach dem Servicetag')
+                    day=serviceday_summary(path,measure,chosen_date)
+                    st.subheader('5 · Vor und nach dem Servicetag')
                     st.caption(f'Jeweils {days} Tage; der Servicetag selbst ist aus beiden Vergleichsfenstern ausgeschlossen. Der Durchschnitt gewichtet jeden vorhandenen Messwert gleich.')
                     for area,(_,row) in zip(st.columns(2),comparison.iterrows()):
                         with area:
                             label='Vor dem Servicetag' if row['window']=='Vorher' else 'Nach dem Servicetag'
                             st.metric(label,f'{german_number(row["mean"],2)} {unit(measure)}' if pd.notna(row['mean']) else 'Keine Messwerte',help='Durchschnitt der vorhandenen Messwerte im jeweiligen Fenster.')
                             st.caption(f'Gültige Messpunkte: {german_number(row["valid"])} · Median: {german_number(row["median"],2)} {unit(measure)}')
+                            st.caption(f'Minimum: {german_number(row["minimum"],2)} {unit(measure)} · Maximum: {german_number(row["maximum"],2)} {unit(measure)}')
+                    st.caption(f'Am Servicetag selbst: {german_number(day.valid)} gültige Messpunkte. Diese gehen nicht in die beiden Vergleichsmittelwerte ein.')
                     if (comparison.valid==0).any():
                         st.warning('Mindestens ein Vergleichsfenster enthält keine gültigen Messwerte. Ein Vorher-Nachher-Vergleich ist für dieses Fenster nicht möglich.')
                     st.caption('Unterschiedliche Messpunktzahlen und Lücken können die Vergleichbarkeit begrenzen. Auch viele Messpunkte belegen keine kontinuierliche Aufzeichnung.')
+                    st.subheader('6 · Beobachtung und Datenlücken verstehen')
+                    st.write(case_observation(comparison,day,unit(measure)))
+                    st.dataframe(coverage_rows(comparison,day,days),hide_index=True,width='stretch',key='case_coverage')
+                    st.caption('Eine Stunde gilt hier als beobachtet, sobald mindestens ein gültiger Messwert vorliegt. Das ist keine vollständige Stundenabdeckung. Doppelte Zeitstempel erhöhen nicht die Anzahl beobachteter Stunden.')
+                    st.info('Noch zu prüfen: Betriebszustände, Türöffnungen, Abtauen, zeitlicher Beginn des Defekts und Inhalt der Serviceberichte. Ohne diese Prüfungen lässt sich eine Veränderung nicht einer Reparatur zuschreiben.')
                     with st.expander('Expertenansicht · Vergleichsfenster und Messpunktzahlen'):
                         table(comparison)
                         st.caption('Median: mittlerer Wert der sortierten Messwerte. Die Grenzen zeigen den ersten und letzten vorhandenen Messpunkt, keine garantierte lückenlose Abdeckung.')
@@ -300,6 +350,11 @@ with data_quality:
     temp_audit=audit[audit.kind.eq('temp')] if audit is not None else None
     areas[2].metric('Mehrfache Temperatur-Zeitstempel',german_number(temp_audit.repeated_timestamps.sum()) if temp_audit is not None else 'Nicht geprüft',help='Zusätzliche Temperaturzeilen mit einem bereits vorhandenen Zeitpunkt. Das beweist nicht, dass alle Messwerte identisch sind.')
     areas[3].metric('Quellenwidersprüche',str(len(conflicts)) if conflicts is not None else 'Nicht geprüft',help='Excel-Einträge mit anderem Fehlertext oder ohne passenden Eintrag am selben Tag in der Autorenliste.')
+    st.markdown('#### Was bedeuten diese Qualitätszahlen fachlich?')
+    st.markdown('''- **Mindestens ein Messpunkt ist keine vollständige Abdeckung.** Ein Servicetag kann nur wenige Werte enthalten; Vorher- und Nachherfenster können leer sein.
+- **Null fehlende Zeitwerte bedeutet nicht null Messlücken.** Jede vorhandene Zeile kann ein Datum besitzen, während zwischen diesen Zeilen Monate ohne Aufzeichnung liegen.
+- **Wiederholte Zeitstempel können Mittelwerte beeinflussen.** Mehrfach vorhandene Zeilen erhalten im messpunktgewichteten Mittel mehrfaches Gewicht. Sie bleiben erhalten, bis eine fachlich begründete Duplikatregel feststeht.
+- **Mehrfach dokumentiert bedeutet nicht mehrfach unabhängig ausgefallen.** Berichte können denselben ungelösten Zustand oder verschiedene Maßnahmen zum selben Fall beschreiben.''')
     if coverage is not None:
         both=int(((coverage.before_rows>0)&(coverage.after_rows>0)).sum())
         st.info(f'Für {both} von {len(coverage)} Einträgen gibt es Messpunkte sowohl in den sieben Tagen vor als auch nach dem Servicetag. Lücken und ungleiche Messpunktzahlen bleiben möglich.')
@@ -342,6 +397,64 @@ with data_quality:
             table(pd.DataFrame(file_errors))
     if audit is None:
         st.caption('Prüfberichte lassen sich in VS Code über die Aufgabe „Datenbank und Qualitätsberichte aktualisieren“ erstellen. Das ist für die normale Filterbedienung nicht nötig.')
+
+with research:
+    st.subheader('Forschungsfrage & Ergebnisse')
+    st.caption('Dieser Bereich beschreibt den gesamten vorhandenen Datenbestand, unabhängig von den Servicefiltern. Die Forschungsfrage ist vorläufig und mit Prof. Blunck abzustimmen.')
+    st.markdown('#### 1 · Forschungsfrage')
+    st.info(QUESTION)
+    st.markdown('#### 2 · Verwendete Datenquellen')
+    full=metrics(df)
+    st.write(f'Die Service-Excel enthält {full["entries"]} Einträge an {full["devices"]} Geräten. Lokal sind {len(files)} lesbare Mess- und Meldungsdateien für {files.device_id.nunique()} Geräte verfügbar. Die Service-Excel, Autorenlisten und publizierten Parquets stammen aus dem Datensatz von Huang und Mitautoren (2023). Serviceberichte werden als separate Originalquelle zur Klärung von Widersprüchen verwendet.')
+    st.markdown('#### 3 · Untersuchungsmethode')
+    st.write('Originalwerte erhalten, Kennungen und Datumsfelder nachvollziehbar aufbereiten, Servicezeilen deskriptiv zählen, Messreihen nach Geräte-ID und Kalendertag untersuchen. DuckDB fragt die Parquets zeitlich begrenzt ab. Vorher-Nachher-Mittelwerte sind messpunktgewichtet und schließen den Servicetag aus. Lücken bleiben leer.')
+    st.markdown('#### 4 · Messbare Zielgrößen')
+    st.markdown('Eintragszahl · betroffene Geräte · Kategorienhäufigkeiten · mehrfache Gerät/Kategorie-Kombinationen · Messpunkte vor, am und nach einem Servicetag · Stunden mit/ohne Messpunkte · Temperaturdurchschnitt, Minimum und Maximum. Diese Größen beschreiben Dokumentation und Beobachtung; sie messen keine bewiesenen unabhängigen Ausfälle.')
+    st.markdown('#### 5 · Vergleichs- und Kontrollverfahren')
+    control=category_control(source,df)
+    control_ok=not control.empty and bool(control.matches.all())
+    checks=[{'Kontrolle':'Berechnete Kategorien gegen zweites Excel-Blatt','Stand':f'{int(control.matches.sum())} von {len(control)} Gruppen stimmen überein' if not control.empty else 'Kontrollblatt nicht vorhanden','Bedeutung':'Rechnerische Konsistenz, keine Validierung der tatsächlichen Fehlerursache.'},
+            {'Kontrolle':'Serviceeinträge gegen Messdaten','Stand':f'{int((coverage.day_rows>0).sum())} von {len(coverage)} Tagen mit Messpunkten' if coverage is not None else 'Aktueller Abdeckungsbericht fehlt','Bedeutung':'Ein Treffer belegt nur einzelne Messungen; Zeitfenster separat prüfen.'},
+            {'Kontrolle':'Excel gegen Autoren-CSV','Stand':f'{len(conflicts)} Einträge mit Abweichung' if conflicts is not None else 'Autorenliste fehlt','Bedeutung':'Keine automatische Umdeutung oder Korrektur von Datum und Fehlertext.'}]
+    st.dataframe(pd.DataFrame(checks),hide_index=True,width='stretch',key='research_checks')
+    with st.expander('Nachvollziehen: Kategorienhäufigkeiten und Excel-Kontrolle'):
+        table(control)
+        if not control.empty and not control_ok:
+            st.warning('Mindestens eine Kontrollsumme weicht ab. Dies muss vor der fachlichen Interpretation geklärt werden.')
+    run=read_test_report(ROOT)
+    if run is None:
+        st.caption('Für diesen Code-Stand liegt hier noch kein aktuelles Testprotokoll vor. Reproduktion: python -m pytest -q --junitxml=docs/testlauf_praxis.xml')
+    else:
+        st.write(f'Aktuelles automatisiertes Prüfprotokoll: {run["passed"]} bestandene Tests, {run["skipped"]} übersprungen, {run["failures"]+run["errors"]} fehlgeschlagen. Dazu gehört ein SQL-/pandas-Vergleich für reale Stundenaggregate, sofern die optionale Messdatei vorliegt.')
+    verification_path=ROOT/'docs/lokale_pruefung.json'
+    try:
+        verification=json.loads(verification_path.read_text(encoding='utf-8-sig')) if verification_path.exists() else {}
+        current=verification.get('status')=='ok' and verification.get('inputs_fingerprint')==inputs_fingerprint(source,files)
+    except (OSError,ValueError,KeyError):
+        current=False
+    if current:
+        checked=pd.Timestamp(verification['checked_at']).tz_convert('Europe/Budapest')
+        st.success(f'Lokaler Datenabgleich für diesen Dateistand erfolgreich, ausgeführt am {checked:%d.%m.%Y um %H:%M}: Excel-Inhalte, DuckDB-Tabellen, SQL-Views und Parquet-Metadaten stimmen überein.')
+    else:
+        st.caption('Kein zum aktuellen Dateistand passendes Abgleichprotokoll verfügbar. Den schreibgeschützten Datenabgleich mit python scripts/check_local.py ausführen; Prüfprotokolle sind keine Garantie fachlich richtiger Labels.')
+    st.markdown('#### 6 · Tatsächlich ermittelte Ergebnisse')
+    st.write(f'{full["entries"]} Serviceeinträge an {full["devices"]} Geräten; {full["devices_multiple_entries"]} Geräte mit mehreren Einträgen und {full["repeated_device_category_pairs"]} wiederholte Original-Gerät/Kategorie-Paare.')
+    category_counts=df.category.value_counts()
+    if not category_counts.empty:
+        st.write(f'Die häufigste Originalkategorie ist {category_label(category_counts.index[0])} mit {int(category_counts.iloc[0])} Einträgen. Das ist eine Dokumentationshäufigkeit, kein Anteil unabhängig ausgefallener Geräte.')
+    if coverage is not None:
+        st.write(f'{int((coverage.day_rows>0).sum())} von {len(coverage)} Servicetagen haben mindestens einen Temperaturmesspunkt. Bei {int(((coverage.before_rows>0)&(coverage.after_rows>0)).sum())} Einträgen gibt es Messpunkte in beiden angrenzenden Siebentagefenstern. Vollständige Abdeckung folgt daraus nicht.')
+    if temp_audit is not None:
+        st.write(f'Der aktuelle Messdatenbericht enthält {int(temp_audit.repeated_timestamps.sum())} zusätzliche Temperaturzeilen mit bereits vorkommendem Zeitstempel. Diese werden nicht stillschweigend entfernt.')
+    st.caption('Die ausgewählten Fallbeispiele und ihre konkreten Temperatur- und Abdeckungswerte werden unter „Temperatur & Betrieb“ direkt aus den Messdateien berechnet.')
+    st.markdown('#### 7 · Wissenschaftliche Einschränkungen')
+    st.write('Wenige dokumentierte und nicht notwendigerweise unabhängige Fälle, unsichere Servicezeiten, Quellenwidersprüche, unterschiedliche Beobachtungsdauern und lange Messlücken begrenzen die Aussagekraft. Geräte ohne Servicebericht sind nicht als gesund validiert. Weder Ausfallwahrscheinlichkeiten noch Reparaturwirkungen oder Prognosegenauigkeiten werden behauptet.')
+    st.markdown('#### 8 · Noch offene Fragen')
+    st.markdown('''- Welche Berichte gehören zu derselben Serviceepisode, welche zu unabhängigen Defekten?
+- Welche Zeitpunkte bezeichnen Auftrag, Reparatur oder tatsächlichen Fehlerbeginn?
+- Wie lassen sich Geräteidentität, historische Uhren und gleiche Beobachtungsbedingungen absichern?
+- Welche Mindestabdeckung ist für sinnvolle deskriptive Vergleiche erforderlich?
+- Können später einfache Referenzverfahren auf vergleichbaren Betriebsfenstern geprüft werden? Diese Verfahren und eine mögliche Risikofrage gehören zur Bachelorperspektive und sind noch nicht implementiert.''')
 
 with method:
     st.subheader('Was diese Anwendung zeigt – und was die Daten erlauben')

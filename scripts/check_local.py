@@ -7,10 +7,12 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import json
+from datetime import datetime, timezone
 import duckdb
 import pandas as pd
 from servicepulse.faults import read_faults, quality, metrics, category_control
 from servicepulse.measurements import inventory
+from servicepulse.research import inputs_fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,6 +47,8 @@ def check(root=ROOT):
         expected_repeats = expected_repeats[expected_repeats.entries > 1].sort_values(['device_id','category']).reset_index(drop=True)
         pd.testing.assert_frame_equal(expected_repeats, repeats, check_dtype=False)
     return {'status':'ok', 'python':sys.executable, 'duckdb':str(database),
+            'checked_at':datetime.now(timezone.utc).isoformat(),
+            'inputs_fingerprint':inputs_fingerprint(root/'fault_summary_R1.xlsx',files),
             **metrics(faults), 'measurement_files':len(files),
             'measurement_rows':int(files.rows.sum()),
             'note':'Excel-Inhalte, SQL-Views und Dateimetadaten stimmen überein; kein Vollscan der Messwerte.'}

@@ -2,7 +2,9 @@
 
 Mit Prof. Dr. Henrik Blunck noch abzustimmen; keine behauptete bereits erteilte Themenfreigabe.
 
-**Praxisphase:** Wie lassen sich die dokumentierten Serviceeinträge und verfügbaren Betriebszeitreihen des ULT-Datensatzes transparent aufbereiten und interaktiv beschreiben, sodass Fehlerkategorien, Geräteunterschiede, zeitliche Verteilungen und Datenlücken nachvollziehbar werden?
+**Praxisphase:** Wie lassen sich historische Serviceeinträge und Betriebszeitreihen von Ultratiefkühlgeräten nachvollziehbar aufbereiten und interaktiv untersuchen, sodass Störungshäufigkeiten, wiederkehrende Einträge, Temperaturverläufe und Datenlücken sichtbar werden?
+
+„Störungshäufigkeiten“ bezeichnet hier Häufigkeiten dokumentierter Serviceeinträge bzw. Autorenkategorien, nicht eine geschätzte Zahl unabhängiger Ausfälle. Die Untersuchungsfrage wird durch eine reproduzierbare Datenaufbereitung, überprüfbare deskriptive Kennzahlen und belegte Falluntersuchungen beantwortet. Im Dashboard sind Frage, Datenquellen, Methode, Zielgrößen, Kontrollen, tatsächliche Ergebnisse, Grenzen und offene Fragen getrennt dargestellt.
 
 Zielgrößen: Eintragszahl, betroffene Geräte, Kategorienhäufigkeiten, Einträge je Gerät, mehrfache Gerät/Kategorie-Paare, Anteil der Servicetage mit Messpunkten sowie verfügbare Messpunktzahlen und Temperaturverteilungen in expliziten Zeitfenstern. Erfolgsmaß ist zunächst eine reproduzierbare Verarbeitung mit überprüfbarer Herkunft und klaren Grenzen, nicht eine hohe Modellgenauigkeit.
 
