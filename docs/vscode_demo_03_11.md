@@ -20,7 +20,7 @@ Beide Befehle müssen erfolgreich enden. Eine bereits laufende Instanz weiterver
 | 0:00–1:00 | VS-Code-Explorer: `app.py`, `servicepulse/`, `data/` zeigen | „Die Oberfläche und Verarbeitung sind getrennt. Alle Quellen und Ergebnisse liegen lokal; die vorhandene Architektur wurde erhalten.“ |
 | 1:00–2:00 | `storage.py` und `measurements.py` öffnen | „DuckDB speichert kleine Service-/Metadatentabellen und fragt große Parquets direkt per SQL ab. SQLite ist nur ein originales Haier-Eingabeformat und wird schreibgeschützt gelesen.“ |
 | 2:00–3:00 | Dashboard-Übersicht, Filter und Geräteanalyse | 46 Serviceeinträge, 24 Geräte. Gerät/Kategorie/Datum kombinieren; Filter zurücksetzen. Einträge sind keine bestätigten unabhängigen Ausfälle |
-| 3:00–4:30 | Zeitliche Verläufe: 806279, 28.06.2022, RTD, sieben Tage | Ganze Servicetage markieren; Messlücken offen zeigen. Vorher/Nachher mit unterschiedlichen Stichprobenzahlen erklären; keine Kausalbehauptung |
+| 3:00–4:30 | Temperatur & Betrieb: 806279, 28.06.2022, Kammertemperatur (RTD), sieben Tage | Ganze Servicetage markieren; Messlücken offen zeigen. Vorher/Nachher mit unterschiedlichen Stichprobenzahlen erklären; keine Kausalbehauptung |
 | 4:30–5:30 | Datenqualität und Kontrollblatt | Quellenwidersprüche und Zeitunsicherheit zeigen. Keine ungeprüfte Korrektur und keine Prognosebehauptung |
 | 5:30–6:30 | `check_local.py`, Testresultat und `technik_sql.md` | „Excel und Datenbank wurden inhaltlich abgeglichen; stündliche SQL-Aggregate wurden zusätzlich mit pandas geprüft. Weitere Tests prüfen kombinierte Filter und Diagramme.“ |
 

@@ -25,7 +25,7 @@ def test_real_device_windows_and_source_warning():
         pytest.skip('Optionale reale Parquet-Dateien fehlen; Download siehe docs/datenimport.md')
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=60).run()
     def select_device(value):
-        widget=next(s for s in app.selectbox if s.label=='Messgerät (gesamter Messdatenbestand)')
+        widget=app.selectbox(key='measurement_device')
         widget.set_value(value).run()
         assert not app.exception
         assert not app.error

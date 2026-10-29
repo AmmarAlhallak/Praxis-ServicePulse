@@ -1,5 +1,13 @@
 # Projektstatus ServicePulse
 
+## Ergänzung: deutsche Benutzeroberfläche am 29.10.2026
+
+Die vorhandene App wurde in fünf Bereiche gegliedert: Übersicht, Störungsanalyse, Temperatur & Betrieb, Datenqualität sowie Methodik & Quellen. Deutsche Kategorien, Messgrößen, Tabellenbezeichnungen, Datumsformate, Einheiten und Diagrammlegenden liegen in einer eigenen Darstellungsschicht. Originalwerte bleiben erhalten; der Serviceexport ergänzt deutsche Lesehilfen. Dateipfade, Rohmeldungen und vollständige Prüftabellen sind als Expertenansichten verfügbar. Der validierende Import wurde in ein separat testbares Modul ausgelagert und überschreibt keine vorhandenen Dateien.
+
+Die überarbeitete Suite umfasst **29 bestandene Tests**, einschließlich Originalwert-Erhaltung, CSV, Import und Überschreibschutz, Lücken in Messkurven und kombinierter Filter. Der lokale Datenabgleich bestätigt unverändert 46/24/11/5 sowie 106 Parquet-Dateien. Die wissenschaftlichen Quelldaten wurden nicht erneut heruntergeladen. HTTP-Healthcheck und lokale Syntaxprüfung waren erfolgreich. Eine fehlerhafte Auswahl numerischer Ereignislisten als Messgröße wurde korrigiert; die skalaren SQL-Aggregate bleiben unverändert.
+
+Bedienung, aktuelle Demo und technische Grenzen: [oberflaeche.md](oberflaeche.md). Die nachfolgenden Abschnitte dokumentieren frühere Entwicklungsstände mit damals 20 bzw. 16 Tests.
+
 ## Ergänzung: Windows-/VS-Code-Prüfung am 29.10.2026
 
 Der bestehende Prototyp wurde erhalten und lokal für VS Code eingerichtet. Arbeitsbereich, `.vscode`-Konfigurationen, `start.cmd` und `scripts/check_local.py` sind ergänzt. Die Microsoft-Python-Erweiterungen wurden installiert. F5-Start im echten VS-Code-Fenster und CMD-Start aus einem anderen Arbeitsordner wurden ausgeführt und über HTTP geprüft. Der schreibgeschützte Abgleich bestätigt Excel, DuckDB und Parquet-Metadaten. Der abschließende Lauf umfasst **20 bestandene Tests**. Eine zuvor dabei gefundene Diagramm-ID-Kollision wurde behoben; freie Messzeitfenster und State-Behandlung wurden korrigiert.

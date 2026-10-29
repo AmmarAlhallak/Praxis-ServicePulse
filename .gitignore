@@ -7,4 +7,5 @@ research/
 # Lokale maschinenspezifische Prüfprotokolle (enthalten absolute Pfade)
 docs/lokale_pruefung.json
 docs/testlauf_windows.xml
+docs/testlauf_oberflaeche.xml
 docs/github_veroeffentlicht.png

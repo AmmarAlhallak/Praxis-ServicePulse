@@ -39,12 +39,12 @@ def test_combined_dashboard_filters_device_analysis_charts_and_reset():
     app.date_input(key='date_range').set_value((date(2022,6,28),date(2022,6,28)))
     app.run()
     assert not app.exception and not app.error
-    assert [metric.value for metric in app.metric] == ['1','1','0','0']
+    assert [metric.value for metric in app.metric[:4]] == ['1','1','0','0']
     assert len(app.get('plotly_chart')) >= 4
-    repeated = app.dataframe[1].value
+    repeated = next(table.value for table in app.dataframe if set(table.value.columns)=={'Geräte-ID','Fehlerkategorie','Serviceeinträge'})
     assert repeated.empty
     specifications = [json.loads(chart.proto.spec) for chart in app.get('plotly_chart')]
-    curves = [spec for spec in specifications if any(trace.get('name')=='mean' for trace in spec['data'])]
+    curves = [spec for spec in specifications if any(trace.get('name')=='Mittelwert' for trace in spec['data'])]
     if (ROOT/'data/raw/Revco/806279_temp.parquet').exists():
         assert len(curves)==1
         assert len(curves[0]['layout']['shapes'])==1

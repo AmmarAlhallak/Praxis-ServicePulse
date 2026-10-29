@@ -39,6 +39,8 @@ Lizenzen, Geräteidentitätskonflikte und Abweichungen der Quellen: [Herkunft](d
 
 ## Funktionen
 
+Die überarbeitete deutsche Oberfläche gliedert sich in **Übersicht**, **Störungsanalyse**, **Temperatur & Betrieb**, **Datenqualität** und **Methodik & Quellen**. Originalwerte bleiben erhalten; deutsche Lesehilfen und aufklappbare Expertenansichten vereinfachen die Bedienung. [Bedienung und aktuelle Demo](docs/oberflaeche.md).
+
 Übersicht, Originalkategorien und zusammengefasste Kategorien, Geräteanalyse, zeitliche Verteilung, reale Temperatur-/Spannungsreihen, aggregierte Minima/Mittelwerte/Maxima, markierte Servicetage, begrenzte Geräteereignisabfragen mit Uhrkorrektur, messpunktgewichtete Vorher/Nachher-Statistik, Qualitätskontrolle, Quellenansicht, CSV-Export und Parquet-Upload. Messgerät kann unabhängig vom Servicefilter gewählt werden; markiert werden ausschließlich ausgewählte Serviceeinträge. Der Bitcode `State` bleibt in den Quelldaten erhalten und wird nicht als kontinuierliche Messgröße gemittelt.
 
 Ohne Parquet funktioniert die Excel-Analyse vollständig. Import größerer Dateien durch Kopieren nach `data/raw/<Modell>/`; Upload bis 300 MB. [Genaue Anleitung](docs/datenimport.md).
@@ -49,6 +51,8 @@ Ohne Parquet funktioniert die Excel-Analyse vollständig. Import größerer Date
 app.py                       Streamlit und Plotly
 servicepulse/
   faults.py                  Excel-Erkennung, Normalisierung, Filter, Kennzahlen
+  presentation.py            deutsche Bezeichnungen und Diagrammdarstellung
+  imports.py                 geprüfter Import ohne Überschreiben
   measurements.py            Parquet-Metadaten, DuckDB-Fensterabfragen, Uhrenoffsets
   raw.py                     eigene kontrollierte Rohdatenleser
   storage.py                 DuckDB-Tabellen und SQL-Views

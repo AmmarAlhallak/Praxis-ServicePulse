@@ -38,7 +38,8 @@ def numeric_columns(path):
     with duckdb.connect() as con:
         description = con.execute('DESCRIBE SELECT * FROM read_parquet(?)', [str(path)]).fetchall()
     # State ist ein Bitcode. Ein arithmetischer Mittelwert wäre kein Gerätezustand.
-    return [name for name, kind, *_ in description if any(x in kind for x in ['INT','DOUBLE','FLOAT','DECIMAL']) and name not in ['index','__index_level_0__','State']]
+    scalar_number = r'(?:U?(?:TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT)|FLOAT|DOUBLE|DECIMAL\(\d+,\s*\d+\))'
+    return [name for name, kind, *_ in description if re.fullmatch(scalar_number,kind) and name not in ['index','__index_level_0__','State']]
 
 def time_bounds(path):
     with duckdb.connect() as con:

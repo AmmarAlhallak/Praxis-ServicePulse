@@ -11,6 +11,8 @@ SQLite wird ausschließlich durch `sqlite3` aus der Python-Standardbibliothek in
 | Datei | Funktion |
 |---|---|
 | `app.py` | Streamlit-Oberfläche, Geräte-/Kategorie-/Datumsfilter, Kennzahlen, Plotly-Diagramme, Geräteanalyse, CSV-Export, Import und Quellenhinweise. Einstieg immer über `python -m streamlit run app.py` |
+| `servicepulse/presentation.py` | deutsche Kategorien, Messgrößen, Einheiten und Tabellenbezeichnungen; Diagramme und CSV-Lesehilfen auf Kopien ohne Änderung der Originaldaten |
+| `servicepulse/imports.py` | lokaler Parquet-Import mit Dateinamen-/Schema-/Größenprüfung und exklusiver Dateierstellung zum Schutz vorhandener Dateien |
 | `servicepulse/faults.py` | passendes Excel-Blatt erkennen, Originalspalten erhalten, ID/Datum/Kategorie normalisieren, Quellzeilen mitführen, filtern, Kennzahlen und Qualität berechnen, Kontrollblatt und Autoren-CSV vergleichen |
 | `servicepulse/measurements.py` | Dateischema/ID/Zeilenanzahl prüfen, Messdateien inventarisieren, verfügbare numerische Messgrößen ermitteln, Zeitgrenzen abfragen, SQL-Fensteraggregate, Geräteereignisse, Uhrenoffsets und Vollprüfung pro Datei |
 | `servicepulse/storage.py` | kleine Tabellen in DuckDB speichern und zwei SQL-Views definieren |
