@@ -1,0 +1,104 @@
+"""Begrenzte DuckDB-Parquet-Abfragen statt Vollimport großer Messdateien."""
+from pathlib import Path
+import re
+import duckdb
+import pandas as pd
+import pyarrow.parquet as pq
+import pyarrow as pa
+
+def quote_identifier(name):
+    return '"' + name.replace('"', '""') + '"'
+
+def inspect_file(path):
+    path = Path(path)
+    match = re.fullmatch(r'(\d{6})_(temp|events)\.parquet', path.name)
+    if not match:
+        raise ValueError('Dateiname muss <sechsstellige Geräte-ID>_temp.parquet oder _events.parquet entsprechen.')
+    schema = pq.ParquetFile(path)
+    if 'Datetime' not in schema.schema_arrow.names:
+        raise ValueError('Spalte Datetime fehlt.')
+    if not pa.types.is_timestamp(schema.schema_arrow.field('Datetime').type):
+        raise ValueError('Datetime muss als Zeitstempel gespeichert sein.')
+    if match[2] == 'temp' and not any((pa.types.is_integer(field.type) or pa.types.is_floating(field.type) or pa.types.is_decimal(field.type)) and field.name not in ['index','__index_level_0__','State'] for field in schema.schema_arrow):
+        raise ValueError('Temperaturdatei enthält keine numerische Messgröße.')
+    return dict(path=str(path.resolve()), device_id=match[1], kind=match[2],
+                model=path.parent.name, rows=schema.metadata.num_rows,
+                columns=', '.join(schema.schema_arrow.names))
+
+def inventory(root):
+    rows, errors = [], []
+    for path in sorted(Path(root).rglob('*.parquet')):
+        try:
+            rows.append(inspect_file(path))
+        except Exception as exc:
+            errors.append({'path': str(path), 'error': str(exc)})
+    return pd.DataFrame(rows, columns=['path','device_id','kind','model','rows','columns']), errors
+
+def numeric_columns(path):
+    with duckdb.connect() as con:
+        description = con.execute('DESCRIBE SELECT * FROM read_parquet(?)', [str(path)]).fetchall()
+    # State ist ein Bitcode. Ein arithmetischer Mittelwert wäre kein Gerätezustand.
+    return [name for name, kind, *_ in description if any(x in kind for x in ['INT','DOUBLE','FLOAT','DECIMAL']) and name not in ['index','__index_level_0__','State']]
+
+def time_bounds(path):
+    with duckdb.connect() as con:
+        return con.execute('SELECT min("Datetime"), max("Datetime") FROM read_parquet(?)', [str(path)]).fetchone()
+
+def series_window(path, column, start, end, bucket='hour'):
+    if column not in numeric_columns(path):
+        raise ValueError('Unbekannte oder nicht numerische Messgröße.')
+    if bucket not in {'minute','hour','day'}:
+        raise ValueError('Ungültiges Aggregationsintervall.')
+    col = quote_identifier(column)
+    with duckdb.connect() as con:
+        return con.execute(f'''SELECT date_trunc('{bucket}', "Datetime") AS time,
+          avg({col}) AS mean, min({col}) AS minimum, max({col}) AS maximum,
+          count({col}) AS n FROM read_parquet(?)
+          WHERE "Datetime" >= ? AND "Datetime" < ?
+          GROUP BY 1 ORDER BY 1''', [str(path), pd.Timestamp(start).to_pydatetime(), pd.Timestamp(end).to_pydatetime()]).df()
+
+def event_window(path, start, end, offset=pd.Timedelta(0), limit=1000):
+    """Separate Ereignisdateien enthalten laut Autorenpipeline interne Uhrzeiten."""
+    with duckdb.connect() as con:
+        df = con.execute('''SELECT * FROM read_parquet(?) WHERE "Datetime" >= ? AND "Datetime" < ? ORDER BY "Datetime" LIMIT ?''',
+                         [str(path), (pd.Timestamp(start)-offset).to_pydatetime(), (pd.Timestamp(end)-offset).to_pydatetime(), limit]).df()
+    df['Datetime_internal'] = df.Datetime
+    df['Datetime'] = df.Datetime + offset
+    return df
+
+def offsets(path):
+    df = pd.read_csv(path, dtype={'freezer_id':'string'})
+    delta = pd.to_datetime(df.actual_time, format='%m/%d/%Y %H:%M:%S') - pd.to_datetime(df.internal_time, format='%m/%d/%Y %H:%M:%S')
+    return dict(zip(df.freezer_id, delta))
+
+def window_comparison(path, column, date, days=7):
+    """Ereignistag vollständig ausschließen; Stichprobenzahlen statt Kausalbehauptung."""
+    date = pd.Timestamp(date).normalize()
+    col = quote_identifier(column)
+    if column not in numeric_columns(path):
+        raise ValueError('Unbekannte Messgröße')
+    rows = []
+    with duckdb.connect() as con:
+        for label, start, end in [('Vorher', date-pd.Timedelta(days=days), date),
+                                  ('Nachher', date+pd.Timedelta(days=1), date+pd.Timedelta(days=days+1))]:
+            row = con.execute(f'''SELECT count(*) AS rows, count({col}) AS valid,
+              avg({col}) AS mean, median({col}) AS median, min("Datetime") AS first_time,
+              max("Datetime") AS last_time FROM read_parquet(?) WHERE "Datetime" >= ? AND "Datetime" < ?''',
+              [str(path), start.to_pydatetime(), end.to_pydatetime()]).df()
+            row.insert(0,'window',label); rows.append(row)
+    return pd.concat(rows, ignore_index=True)
+
+def audit_file(path):
+    """Vollständige Zeit-/RTD-Prüfung einer Datei, ohne Messdaten zu persistieren."""
+    meta = inspect_file(path)
+    has_rtd = 'RTD' in pq.ParquetFile(path).schema_arrow.names
+    extra = ', count(*) FILTER (WHERE RTD IS NULL) AS missing_rtd, min(RTD) AS min_rtd, max(RTD) AS max_rtd' if has_rtd else ''
+    with duckdb.connect() as con:
+        result = con.execute(f'''SELECT count(*) AS rows, min("Datetime") AS first_time,
+          max("Datetime") AS last_time, count(*) FILTER (WHERE "Datetime" IS NULL) AS null_times,
+          count("Datetime") - count(DISTINCT "Datetime") AS repeated_timestamps {extra}
+          FROM read_parquet(?)''', [str(path)]).df().iloc[0].to_dict()
+        gaps = con.execute('''SELECT max(gap) AS max_gap_seconds, median(gap) AS median_gap_seconds,
+          count(*) FILTER (WHERE gap > 86400) AS gaps_over_day FROM
+          (SELECT epoch("Datetime" - lag("Datetime") OVER (ORDER BY "Datetime")) AS gap FROM read_parquet(?))''', [str(path)]).df().iloc[0].to_dict()
+    return {**meta, **result, **gaps}

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+research/
+*.log
+# Lokale maschinenspezifische Prüfprotokolle (enthalten absolute Pfade)
+docs/lokale_pruefung.json
+docs/testlauf_windows.xml
+docs/github_veroeffentlicht.png
