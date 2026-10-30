@@ -60,7 +60,8 @@ def inputs_fingerprint(source, files):
     return digest.hexdigest()
 
 def read_test_report(root):
-    root=Path(root);path=root/'docs/testlauf_praxis.xml'
+    root=Path(root);path=root/'docs/testlauf_postgresql.xml'
+    if not path.exists():path=root/'docs/testlauf_praxis.xml'
     if not path.exists():return None
     sources=[root/'app.py',*root.glob('servicepulse/*.py'),*root.glob('tests/*.py')]
     if any(p.stat().st_mtime>path.stat().st_mtime for p in sources):return None

@@ -11,9 +11,9 @@ def test_real_app_default_and_empty_filters():
     assert app.metric[0].value=='0'
 
 def test_app_excel_only(tmp_path, monkeypatch):
-    import servicepulse.measurements as measurements
-    original=measurements.inventory
-    monkeypatch.setattr(measurements,'inventory',lambda root:original(tmp_path))
+    import servicepulse.repository as repo
+    from servicepulse.measurements import inventory
+    monkeypatch.setattr(repo,'files_frame',lambda:inventory(tmp_path)[0])
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=60).run()
     assert not app.exception
     assert app.metric[0].value=='46'

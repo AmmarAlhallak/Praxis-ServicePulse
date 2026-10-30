@@ -1,5 +1,12 @@
 # Projektstatus ServicePulse
 
+## PostgreSQL und vereinfachte Verwaltung am 30.10.2026
+
+Vorheriger Stand durch Checkpoint `d170faa`, separaten Branch `development/postgresql-service-management`, Git-Bundle, DuckDB-/Excel-Kopie und Original-Prüfsummen gesichert. PostgreSQL 17 war bereits installiert; eigene lokale Instanz auf Port 55432 eingerichtet, bestehender Windows-Dienst unverändert. 46 historische Berichte mit Originalinhalt übernommen, 53 Geräte und 106 Messdateien registriert. Neue Berichte und versionierte Änderungen werden transaktional gespeichert; die vierteilige Oberfläche erhält den wissenschaftlichen Kern. [Testbericht](postgresql_testbericht.md), [Windows-Start](postgresql_windows.md), [Fallprüfung 806279](fall_806279_pruefung.md).
+
+Die folgenden Abschnitte dokumentieren frühere Entwicklungsstände.
+
+
 ## Ergänzung: Forschungsfrage, Filter und geführte Fälle am 29.10.2026
 
 Der zuvor nur lokale deutsche UI-Stand wurde **vor** dieser Weiterentwicklung in Commit `1c40d9a` gesichert. Es wurde keine ältere GitHub-Version übernommen. Forschungsfrage, Datenquellen, Methode, Zielgrößen, Kontrollen, berechnete Ergebnisse, Grenzen und offene Fragen sind jetzt im eigenen Dashboard-Bereich sichtbar.

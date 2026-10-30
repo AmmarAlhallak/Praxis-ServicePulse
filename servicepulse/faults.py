@@ -1,4 +1,4 @@
-"""Excel bleibt die maßgebliche Servicequelle; Originalwerte bleiben erhalten."""
+"""Leser der unveränderten Excel-Referenz; operative Berichte stehen in PostgreSQL."""
 from pathlib import Path
 import re
 import pandas as pd

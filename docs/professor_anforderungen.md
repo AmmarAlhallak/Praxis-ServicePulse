@@ -1,5 +1,8 @@
 # Anforderungen der Praxisphase: nachvollziehbarer Stand
 
+**Technische Ergänzung 30.10.2026:** PostgreSQL-Verwaltung mit SQLAlchemy/Alembic, unveränderlichen Forschungsoriginalen, separaten eigenen Berichten und Audit ist umgesetzt. Vier Hauptbereiche ersetzen die sechs bisherigen Tabs. Der fachliche Erfüllungsstand unten bleibt getrennt von dieser Verwaltungsfunktion. [Architektur](postgresql_architektur.md), [Prüfbericht](postgresql_testbericht.md).
+
+
 Stand 29.10.2026. „Erfüllt“ bezieht sich auf den vorhandenen Prototyp und nachgewiesene Arbeit, nicht auf eine bereits erfolgte akademische Abnahme.
 
 | Anforderung | Stand | Vorhandener Nachweis | Noch erforderlich |

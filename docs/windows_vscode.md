@@ -1,5 +1,8 @@
 # ServicePulse unter Windows in Visual Studio Code
 
+**Aktuell seit 30.10.2026:** PostgreSQL ist die operative Servicequelle; vier Hauptbereiche. [Startanleitung](postgresql_windows.md) und [Architektur](postgresql_architektur.md). Die folgenden früheren Details bleiben als Entwicklungshistorie erhalten; der direkte Excel-App-Start ist abgelöst.
+
+
 Arbeitsordner: `C:\Users\ammar\Downloads\fault_summary_R1`. Der bestehende Code, die Excel-Datei, Parquets und DuckDB bleiben die Grundlage. Es wurde kein zweites Projekt angelegt.
 
 ## Öffnen, bearbeiten und starten

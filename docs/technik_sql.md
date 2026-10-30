@@ -1,5 +1,8 @@
 # Dateien, Datenfluss und SQL
 
+**Aktuell seit 30.10.2026:** PostgreSQL ist die operative Servicequelle; vier Hauptbereiche. [Startanleitung](postgresql_windows.md) und [Architektur](postgresql_architektur.md). Die folgenden früheren Details bleiben als Entwicklungshistorie erhalten; der direkte Excel-App-Start ist abgelöst.
+
+
 ## Datenbankentscheidung
 
 **DuckDB bleibt die einzige Anwendungsdatenbank.** `data/processed/servicepulse.duckdb` ist eine lokale eingebettete Datei; es gibt keinen separat zu administrierenden Datenbankserver, keine Zugangsdaten und keinen zusätzlichen SQL-Dienst.

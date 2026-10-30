@@ -1,5 +1,8 @@
 # Deutsche Benutzeroberfläche
 
+**Aktuell seit 30.10.2026:** PostgreSQL ist die operative Servicequelle; vier Hauptbereiche. [Startanleitung](postgresql_windows.md) und [Architektur](postgresql_architektur.md). Die folgenden früheren Details bleiben als Entwicklungshistorie erhalten; der direkte Excel-App-Start ist abgelöst.
+
+
 Aktueller Bedienstand: zusätzlich **Forschungsfrage & Ergebnisse**, schlanke Alle-/Einzelauswahl und getrennte Datumsfelder für Servicefilter. Die Fallanalyse ist standardmäßig unabhängig von den Servicefiltern; eine Kopplung ist in der Expertenansicht möglich. Direktfälle: Temperaturveränderung 806279/28.06.2022, Messlücke 806030/28.01.2015, Datumswiderspruch 806031/03.02.2023. Der aktuelle Leitfaden steht in [praxis_demo_03_11.md](praxis_demo_03_11.md). Die folgenden Abschnitte beschreiben den Ausgangsstand der deutschen Überarbeitung; die dortige Aussage einer standardmäßigen Kopplung der Servicefilter an Messkurven wurde durch die ausdrückliche optionale Kopplung ersetzt.
 
 Überarbeitung am 29.10.2026 im bestehenden Projekt. Keine Originaldaten wurden verändert oder gelöscht, und es wurden keine Messwerte ergänzt. DuckDB, Excel-Aufbereitung und die SQL-Fensterberechnungen bleiben erhalten.

@@ -1,5 +1,8 @@
 # Datenimport und Wiederbeschaffung
 
+**Aktuell seit 30.10.2026:** PostgreSQL ist die operative Servicequelle; vier Hauptbereiche. [Startanleitung](postgresql_windows.md) und [Architektur](postgresql_architektur.md). Die folgenden früheren Details bleiben als Entwicklungshistorie erhalten; der direkte Excel-App-Start ist abgelöst.
+
+
 Am 29.10.2026 wurden alle 106 veröffentlichten Parquets erfolgreich geladen; aktuell musst du für das Dashboard keine weiteren Messdateien herunterladen. Gesamter Rohdatenbestand und das Figshare-ZIP sind nicht erforderlich. Die App funktioniert bei fehlenden Parquets weiterhin mit Excel.
 
 ## Automatischer selektiver Download

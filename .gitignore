@@ -1,4 +1,10 @@
 .venv/
+.env
+.env.*
+!.env.example
+*.dump
+docs/testlauf_postgresql.xml
+docs/postgresql_pruefung.json
 __pycache__/
 .pytest_cache/
 data/

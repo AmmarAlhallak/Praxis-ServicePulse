@@ -2,7 +2,16 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "ServicePulse: PostgreSQL vorbereiten",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["${workspaceFolder}/scripts/prepare_database.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "ServicePulse: Dashboard starten",
+      "dependsOn": "ServicePulse: PostgreSQL vorbereiten",
       "type": "process",
       "command": "${workspaceFolder}/.venv/Scripts/python.exe",
       "args": ["-m", "streamlit", "run", "${workspaceFolder}/app.py", "--server.address", "127.0.0.1"],

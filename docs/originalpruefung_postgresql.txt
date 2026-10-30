@@ -1,0 +1,1 @@
+30.10.2026: SHA-256-Vergleich erfolgreich. Alle 143 vor der Umstellung erfassten Originaldateien unverändert, einschließlich Excel, 106 Parquets und vorhandener Forschungsreferenzen.
