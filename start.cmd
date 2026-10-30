@@ -7,12 +7,12 @@ if not exist "%~dp0.venv\Scripts\python.exe" (
   exit /b 1
 )
 echo ServicePulse: Datenbank starten und pruefen ...
-"%~dp0.venv\Scripts\python.exe" "%~dp0scripts\prepare_database.py"
+"%~dp0.venv\Scripts\python.exe" "%~dp0scripts\prepare_database.py" --start-only
 if errorlevel 1 (
   pause
   exit /b 1
 )
-"%~dp0.venv\Scripts\python.exe" -m streamlit run "%~dp0app.py" --server.address 127.0.0.1 %*
+"%~dp0.venv\Scripts\python.exe" -m streamlit run "%~dp0app.py" --server.address 127.0.0.1 --server.port 8501 %*
 set "servicepulse_exit=%errorlevel%"
 if not "%servicepulse_exit%"=="0" pause
 exit /b %servicepulse_exit%

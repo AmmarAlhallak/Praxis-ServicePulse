@@ -1,0 +1,33 @@
+name: Windows code and PostgreSQL checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    env:
+      SERVICEPULSE_CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check code
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+      - name: Run tests in isolated native PostgreSQL
+        run: python -m pytest --cov --cov-report=term-missing --cov-report=xml --junitxml=docs/testlauf_ci.xml -ra
+      - name: Retain actual test and coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-check-results
+          path: |
+            docs/testlauf_ci.xml
+            coverage.xml
