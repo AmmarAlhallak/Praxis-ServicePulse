@@ -1,5 +1,7 @@
 # Geräteverwaltung und PostgreSQL: erneute Prüfung am 30.10.2026
 
+**Neuer Stand nach Code-Review:** 57 Tests bestanden, keine übersprungenen Tests und keine Warnungen. Siehe [aktuellen Abschlussbericht](ABSCHLUSSBERICHT_CODE_REVIEW.md). Die folgenden Zahlen dokumentieren den früheren Stand vor diesem Review.
+
 ## Ergebnis
 
 Vollständige Testsuite: **47 bestanden, 0 fehlgeschlagen, 0 übersprungen**, Laufzeit **75,25 Sekunden**. Tatsächliche Ausgabe: [testlauf_postgresql.txt](testlauf_postgresql.txt). JUnit-Protokoll lokal: `docs/testlauf_postgresql.xml`.

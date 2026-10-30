@@ -4,13 +4,14 @@ Stand 30.10.2026. Weiterentwicklung des bestehenden Projekts.
 
 | Datei | Aufgabe |
 |---|---|
-| `app.py` | Vier Hauptbereiche, Filter, Häufigkeiten, Zeitreihen und Forschung |
+| `app.py` | Konfiguration, Daten laden, vier Bereiche zusammenführen |
+| `servicepulse/ui/` | Getrennte Übersicht, Betriebsanalyse, Qualität sowie gemeinsame Darstellung und Servicefilter |
 | `servicepulse/management.py` | Geräte suchen/anlegen, Berichte erfassen/bearbeiten, Historie und ähnliche Fälle |
 | `servicepulse/database.py` | SQLAlchemy-Verbindung aus lokalem Geheimnis |
 | `servicepulse/models.py` | Tabellen, Beziehungen und Versionsprüfung |
 | `servicepulse/repository.py` | Erstimport, PostgreSQL-Abfragen, Transaktionen, Geräte und Dateiregister |
 | `migrations/versions/0001…0003` | Alembic-Schemaänderungen, Herkunftsschutz, Audit, veröffentlichte Dateiduplikate |
-| `scripts/prepare_database.py` | Vorhandenes PostgreSQL starten, Migration, Import, Rollenrechte, Dump |
+| `scripts/prepare_database.py` | Normalstart prüfen; Erstvorbereitung, Migration, Synchronisation und Dump ausdrücklich getrennt |
 | `servicepulse/faults.py` | Excel-Referenz lesen, Kennzahlen, Quellen- und Kontrollblattvergleich |
 | `servicepulse/measurements.py` | Begrenzte DuckDB-Parquet-Abfragen und Qualitätsprüfung |
 | `servicepulse/case_review.py` | Messlücken, warme Werte und originale State-Bits bei 806279 prüfen |

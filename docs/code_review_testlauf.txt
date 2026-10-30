@@ -1,0 +1,30 @@
+.........................................................                [100%]
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.7-final-0 _______________
+
+Name                           Stmts   Miss  Cover   Missing
+------------------------------------------------------------
+app.py                            42      0   100%
+servicepulse\__init__.py           0      0   100%
+servicepulse\case_review.py       12      0   100%
+servicepulse\database.py          16      0   100%
+servicepulse\faults.py            74      2    97%   26, 140
+servicepulse\imports.py           41      2    95%   30, 54
+servicepulse\management.py       144     14    90%   76-77, 95-99, 218, 220, 246, 264, 266-267, 288, 304-305
+servicepulse\measurements.py      87      4    95%   36, 108, 160, 184
+servicepulse\models.py            76      0   100%
+servicepulse\presentation.py      70      0   100%
+servicepulse\raw.py               42      4    90%   32, 38, 72, 96
+servicepulse\repository.py       205     35    83%   73, 135, 140-142, 146, 174-199, 220-221, 257, 363, 367, 370, 375, 403, 409, 427
+servicepulse\research.py          59      4    93%   56, 120, 141-142
+servicepulse\storage.py           13      0   100%
+servicepulse\ui\__init__.py        0      0   100%
+servicepulse\ui\common.py         20      0   100%
+servicepulse\ui\operation.py     175     26    85%   51, 97, 213, 235, 242, 376, 392-403, 423-444, 446
+servicepulse\ui\overview.py       57      0   100%
+servicepulse\ui\quality.py       140     10    93%   50, 71, 124, 179-183, 240, 249, 262-263
+servicepulse\ui\shell.py          57      0   100%
+------------------------------------------------------------
+TOTAL                           1330    101    92%
+Coverage XML written to file coverage.xml
+57 passed in 103.74s (0:01:43)

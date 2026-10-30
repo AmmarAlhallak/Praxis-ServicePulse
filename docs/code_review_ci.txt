@@ -1,0 +1,37 @@
+..s.....sss................s....................ss.......                [100%]
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.7-final-0 _______________
+
+Name                           Stmts   Miss  Cover   Missing
+------------------------------------------------------------
+app.py                            42      0   100%
+servicepulse\__init__.py           0      0   100%
+servicepulse\case_review.py       12      7    42%   15-48
+servicepulse\database.py          16      1    94%   23
+servicepulse\faults.py            74     11    85%   26, 140, 145-162
+servicepulse\imports.py           41      2    95%   30, 54
+servicepulse\management.py       144     16    89%   76-77, 95-99, 218, 220, 246, 264, 266-267, 288, 300-305
+servicepulse\measurements.py      87     12    86%   36, 108, 146-150, 160, 183-188
+servicepulse\models.py            76      0   100%
+servicepulse\presentation.py      70      5    93%   154-156, 170, 178
+servicepulse\raw.py               42      4    90%   32, 38, 72, 96
+servicepulse\repository.py       205     35    83%   73, 135, 140-142, 146, 174-199, 220-221, 257, 363, 367, 370, 375, 403, 409, 427
+servicepulse\research.py          59     14    76%   56, 62-71, 82-97, 141-142
+servicepulse\storage.py           13      0   100%
+servicepulse\ui\__init__.py        0      0   100%
+servicepulse\ui\common.py         20      0   100%
+servicepulse\ui\operation.py     175    146    17%   46-59, 86-403, 423-444, 446
+servicepulse\ui\overview.py       57      0   100%
+servicepulse\ui\quality.py       140     34    76%   42-50, 55-71, 105-106, 110-111, 122, 132-141, 166-167, 175, 177, 179-183, 240, 249, 262-263, 265-266, 283, 287
+servicepulse\ui\shell.py          57      0   100%
+------------------------------------------------------------
+TOTAL                           1330    287    78%
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_app.py:37: Optionale reale Parquet-Dateien fehlen; Download siehe docs/datenimport.md
+SKIPPED [1] tests\test_faults.py:83: Optionale Autorenreferenz fehlt
+SKIPPED [1] tests\test_local_integration.py:20: Optionaler lokaler Build fehlt
+SKIPPED [1] tests\test_local_integration.py:30: Optionale reale Messdatei fehlt
+SKIPPED [1] tests\test_postgresql.py:333: Reale Parquet-Datei fehlt
+SKIPPED [1] tests\test_research.py:84: Optionale reale Fall-Messdatei fehlt
+SKIPPED [1] tests\test_research.py:116: Optionale Messdatei fehlt
+50 passed, 7 skipped in 65.99s (0:01:05)

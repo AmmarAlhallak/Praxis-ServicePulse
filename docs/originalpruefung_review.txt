@@ -1,0 +1,10 @@
+devices: 53 Zeilen, SHA-256 identisch zum Reviewbeginn
+categories: 12 Zeilen, SHA-256 identisch zum Reviewbeginn
+sources: 107 Zeilen, SHA-256 identisch zum Reviewbeginn
+service_reports: 46 Zeilen, SHA-256 identisch zum Reviewbeginn
+service_actions: 0 Zeilen, SHA-256 identisch zum Reviewbeginn
+measurement_files: 106 Zeilen, SHA-256 identisch zum Reviewbeginn
+audit_log: 46 Zeilen, SHA-256 identisch zum Reviewbeginn
+alembic_version: 1 Zeilen, SHA-256 identisch zum Reviewbeginn
+original_sha256.csv: 142 von 142 Dateien unverändert (vollständiger SHA-256-Vergleich)
+excel_sha256.csv: 1 von 1 Dateien unverändert (vollständiger SHA-256-Vergleich)
