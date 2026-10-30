@@ -1,6 +1,7 @@
 """Isolierte native PostgreSQL-Instanz; CI benötigt keine lokale Konfiguration."""
 
 import os
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -35,18 +36,31 @@ def postgres_instance(tmp_path_factory):
     password = folder / "init.tmp"
     password.write_text(settings["admin_password"], encoding="utf-8")
     try:
-        run(
-            Path(settings["bin"]) / "initdb.exe",
-            "-D",
-            cluster,
-            "-U",
-            "servicepulse_owner",
-            "--encoding=UTF8",
-            "--locale=C",
-            "--auth=scram-sha-256",
-            "--pwfile",
-            password,
+        result = subprocess.run(
+            [
+                str(Path(settings["bin"]) / "initdb.exe"),
+                "-D",
+                str(cluster),
+                "-U",
+                "servicepulse_owner",
+                "--encoding=UTF8",
+                "--locale=C",
+                "--auth=scram-sha-256",
+                "--pwfile",
+                str(password),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
+        if result.returncode:
+            diagnostic = result.stdout + result.stderr
+            for key in ["admin_password", "app_password"]:
+                diagnostic = diagnostic.replace(settings[key], "[REDACTED]")
+            raise RuntimeError(
+                "Isolierte Testdatenbank konnte nicht initialisiert werden:\n" + diagnostic
+            )
     finally:
         password.unlink(missing_ok=True)
     with (cluster / "postgresql.conf").open("a", encoding="utf-8") as handle:
