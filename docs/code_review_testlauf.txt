@@ -27,4 +27,4 @@ servicepulse\ui\shell.py          57      0   100%
 ------------------------------------------------------------
 TOTAL                           1330    101    92%
 Coverage XML written to file coverage.xml
-57 passed in 103.74s (0:01:43)
+57 passed in 99.46s (0:01:39)

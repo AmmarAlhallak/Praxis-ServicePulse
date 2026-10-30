@@ -34,4 +34,4 @@ SKIPPED [1] tests\test_local_integration.py:30: Optionale reale Messdatei fehlt
 SKIPPED [1] tests\test_postgresql.py:333: Reale Parquet-Datei fehlt
 SKIPPED [1] tests\test_research.py:84: Optionale reale Fall-Messdatei fehlt
 SKIPPED [1] tests\test_research.py:116: Optionale Messdatei fehlt
-50 passed, 7 skipped in 65.99s (0:01:05)
+50 passed, 7 skipped in 63.36s (0:01:03)
