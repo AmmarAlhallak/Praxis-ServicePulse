@@ -7,6 +7,13 @@ docs/testlauf_postgresql.xml
 docs/postgresql_pruefung.json
 __pycache__/
 .pytest_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+coverage.xml
+docs/testlauf_vor_review.xml
+docs/testlauf_review.xml
+docs/testlauf_ci.xml
 data/
 research/
 *.log
