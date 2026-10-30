@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -17,14 +18,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope="session")
-def postgres_instance(tmp_path_factory):
+def postgres_folder(tmp_path_factory):
+    """Gibt nur dem wegwerfbaren CI-Cluster die für PostgreSQL nötigen Windows-Rechte."""
+    from scripts.prepare_database import run
+
+    runner_temp = os.environ.get("RUNNER_TEMP")
+    if os.name == "nt" and os.environ.get("SERVICEPULSE_CI") == "1" and runner_temp:
+        base = Path(runner_temp).resolve()
+        with tempfile.TemporaryDirectory(prefix="servicepulse_pg_", dir=base) as directory:
+            folder = Path(directory).resolve()
+            assert folder.parent == base and folder.name.startswith("servicepulse_pg_")
+            # initdb reduziert Administratorrechte. Pytests private 0700-Ordner
+            # sind für diesen Token nicht lesbar, auch nicht die Passwortdatei.
+            # Ausschließlich dieser neue Testordner auf dem kurzlebigen Runner.
+            run("icacls.exe", folder, "/grant", "*S-1-5-32-545:(OI)(CI)M")
+            yield folder
+    else:
+        yield tmp_path_factory.mktemp("servicepulse_pg")
+
+
+@pytest.fixture(scope="session")
+def postgres_instance(postgres_folder):
     """Eigene temporäre PostgreSQL-Instanz, auch Neustarts betreffen keinen Nutzserver."""
     import secrets
     import socket
 
     from scripts.prepare_database import run
 
-    folder = tmp_path_factory.mktemp("servicepulse_pg")
+    folder = postgres_folder
     cluster = folder / "cluster"
     settings = {"bin": str(find_postgres_bin())}
     with socket.socket() as sock:
