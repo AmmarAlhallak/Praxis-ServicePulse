@@ -18,8 +18,30 @@ from scripts.prepare_database import local_settings,connection_url,migrate
 ROOT=Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope='module')
-def isolated_database():
-    settings=local_settings();name='servicepulse_test_'+uuid.uuid4().hex
+def test_cluster(tmp_path_factory):
+    """Eigene temporäre PostgreSQL-Instanz, auch Neustarts betreffen keinen Nutzserver."""
+    import socket,secrets
+    from scripts.prepare_database import run
+    folder=tmp_path_factory.mktemp('servicepulse_pg');cluster=folder/'cluster'
+    settings=dict(local_settings())
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1',0));settings['port']=sock.getsockname()[1]
+    settings.update(admin_password=secrets.token_urlsafe(32),app_password=secrets.token_urlsafe(32))
+    password=folder/'init.tmp';password.write_text(settings['admin_password'],encoding='utf-8')
+    try:run(Path(settings['bin'])/'initdb.exe','-D',cluster,'-U','servicepulse_owner','--encoding=UTF8','--locale=C','--auth=scram-sha-256','--pwfile',password)
+    finally:password.unlink(missing_ok=True)
+    with (cluster/'postgresql.conf').open('a',encoding='utf-8') as handle:
+        handle.write(f"\nlisten_addresses='127.0.0.1'\nport={settings['port']}\n")
+    run(Path(settings['bin'])/'pg_ctl.exe','-D',cluster,'-l',folder/'server.log','-w','start')
+    try:
+        with psycopg.connect(host='127.0.0.1',port=settings['port'],dbname='postgres',user='servicepulse_owner',password=settings['admin_password'],autocommit=True) as c:
+            c.execute(sql.SQL('CREATE ROLE servicepulse_app LOGIN PASSWORD {}').format(sql.Literal(settings['app_password'])))
+        yield settings,cluster
+    finally:run(Path(settings['bin'])/'pg_ctl.exe','-D',cluster,'-m','fast','-w','stop')
+
+@pytest.fixture(scope='module')
+def isolated_database(test_cluster):
+    settings,_=test_cluster;name='servicepulse_test_'+uuid.uuid4().hex
     args=dict(host='127.0.0.1',port=settings['port'],dbname='postgres',user='servicepulse_owner',password=settings['admin_password'],autocommit=True)
     with psycopg.connect(**args) as connection:connection.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
     db=create_engine(connection_url(settings,True,database=name),hide_parameters=True)
@@ -93,6 +115,9 @@ def test_management_form_updates_statistics_and_history(database,monkeypatch):
     monkeypatch.setattr(repo,'engine',lambda:database)
     app=AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
     assert not app.exception and app.metric[0].value=='46'
+    assert not any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    app.button(key='open_new_report_806279').click().run()
+    assert not app.exception
     description=next(w for w in app.text_area if w.label=='Beschreibung der Störung')
     source=next(w for w in app.text_input if w.label=='Quelle / Herkunft')
     description.set_value('Automatischer Formulartest, kein Forschungsbefund');source.set_value('Isolierte PostgreSQL-Testdatenbank')
@@ -122,21 +147,21 @@ def test_parquet_import_validates_null_times_and_duplicate_bytes(tmp_path,databa
     with pytest.raises(ValueError,match='Identische Messdatei'):import_parquet((tmp_path/'999991_temp.parquet').read_bytes(),'999992_temp.parquet',tmp_path,registry=repo.files_frame(database),source='Test')
     assert not (tmp_path/'999992_temp.parquet').exists()
 
-def test_owned_postgresql_restart_keeps_new_report(database):
-    from scripts.prepare_database import start_local,run,CLUSTER
-    settings=local_settings();rid=repo.save_report(data(),db=database)
-    database.dispose();repo.engine().dispose()
+def test_owned_postgresql_restart_keeps_new_report(database,test_cluster):
+    from scripts.prepare_database import run
+    settings,cluster=test_cluster;rid=repo.save_report(data(),db=database)
+    database.dispose()
     try:
-        run(Path(settings['bin'])/'pg_ctl.exe','-D',CLUSTER,'-m','fast','-w','stop')
+        run(Path(settings['bin'])/'pg_ctl.exe','-D',cluster,'-m','fast','-w','stop')
     finally:
-        start_local()
+        run(Path(settings['bin'])/'pg_ctl.exe','-D',cluster,'-l',cluster.parent/'server.log','-w','start')
     persisted=repo.reports_frame(database)
     row=persisted.loc[persisted.report_id.eq(rid)].iloc[0]
     assert row.fault_text=='Künstlicher Bericht ausschließlich in der Testdatenbank'
     assert len(repo.history(rid,database))==1
 
-def test_application_role_can_save_but_cannot_delete_or_rewrite_audit(database):
-    settings=local_settings()
+def test_application_role_can_save_but_cannot_delete_or_rewrite_audit(database,test_cluster):
+    settings,_=test_cluster
     with database.begin() as con:
         con.execute(text('GRANT USAGE ON SCHEMA public TO servicepulse_app'))
         con.execute(text('GRANT SELECT, INSERT, UPDATE ON devices,categories,sources,service_reports,service_actions,measurement_files TO servicepulse_app'))
@@ -152,10 +177,10 @@ def test_application_role_can_save_but_cannot_delete_or_rewrite_audit(database):
             with app.begin() as con:con.execute(text("UPDATE audit_log SET reason='tampered' WHERE report_id=:id"),{'id':rid})
     finally:app.dispose()
 
-def test_dump_restore_retains_report_and_audit(database,tmp_path):
+def test_dump_restore_retains_report_and_audit(database,tmp_path,test_cluster):
     import os
     from scripts.prepare_database import run
-    settings=local_settings();rid=repo.save_report(data(),db=database)
+    settings,_=test_cluster;rid=repo.save_report(data(),db=database)
     target=tmp_path/'isolated_test.dump';env={**os.environ,'PGPASSWORD':settings['admin_password']}
     run(Path(settings['bin'])/'pg_dump.exe','-h','127.0.0.1','-p',settings['port'],'-U','servicepulse_owner','-d',database.url.database,'-Fc','-f',target,env=env)
     name='servicepulse_restore_test_'+uuid.uuid4().hex
@@ -186,3 +211,95 @@ def test_real_temperature_gap_warm_values_and_corrected_events():
     events=event_window(ROOT/'data/raw/Revco/806279_events.parquet','2022-06-21','2022-07-06',clock)
     assert events.loc[events.Event.eq('Shutdown'),'Datetime'].iloc[0]==pd.Timestamp('2022-06-22 10:36:52')
     assert events.loc[events.Event.eq('Display Power On'),'Datetime'].iloc[0]==pd.Timestamp('2022-06-27 10:48:09')
+
+def test_collapsed_form_and_historical_missingness_are_display_only(database,monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.setattr(repo,'engine',lambda:database)
+    before=repo.reports_frame(database)
+    app=AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
+    assert not app.exception
+    assert not any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    tables=[w.value for w in app.dataframe if 'Herkunft' in w.value and 'Maßnahme' in w.value]
+    assert tables
+    for frame in tables:
+        historical=frame[frame.Herkunft.eq('Veröffentlichte Forschungsdaten')]
+        assert historical.Status.eq('Nicht dokumentiert').all()
+        assert historical['Maßnahme'].eq('Nicht dokumentiert').all()
+    app.button(key='open_new_report_806279').click().run()
+    assert any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    app.button(key='close_new_report_806279').click().run()
+    assert not any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    app.radio(key='report_mode').set_value('Bestehenden Bericht bearbeiten').run()
+    status=next(w for w in app.selectbox if w.label=='Status')
+    assert status.value=='nicht angegeben' and 'Nicht dokumentiert' in status.options
+    pd.testing.assert_frame_equal(before,repo.reports_frame(database))
+
+def test_new_device_report_full_flow_and_dashboard_restart(database,monkeypatch):
+    """Alle acht angefragten Schritte, ausschließlich im temporären Testbestand."""
+    from streamlit.testing.v1 import AppTest
+    import os,socket,subprocess,sys,tempfile,time,urllib.request
+    monkeypatch.setattr(repo,'engine',lambda:database)
+    original=repo.reports_frame(database,True)
+    app=AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
+    app.text_input(key='new_device_id').set_value('999992')
+    app.text_input(key='new_device_name').set_value('Isoliertes automatisiertes Testgerät')
+    next(b for b in app.button if b.label=='Gerät anlegen').click().run()
+    assert not app.exception and '999992' in set(repo.devices_frame(database)['Geräte-ID'])
+    app.selectbox(key='managed_device').set_value('999992').run()
+    assert any('keine Messdaten' in info.value for info in app.info)
+    assert not any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    app.button(key='open_new_report_999992').click().run()
+    next(w for w in app.text_area if w.label=='Beschreibung der Störung').set_value('Künstlicher isolierter Testbericht')
+    next(w for w in app.text_input if w.label=='Quelle / Herkunft').set_value('Automatisierte Testdatenbank')
+    next(b for b in app.button if b.label=='Servicebericht speichern').click().run()
+    assert not app.exception and not app.error
+    assert [w.value for w in app.metric[:4]]==['47','25','11','5']
+    assert not any(w.label=='Beschreibung der Störung' for w in app.text_area)
+    with database.connect() as c:
+        saved=c.execute(text("SELECT id,origin,original,source_row,status FROM service_reports WHERE device_id='999992'")).one()
+        assert saved.origin=='manual' and saved.original is None and saved.source_row is None
+        assert c.execute(text("SELECT count(*) FROM service_reports WHERE origin='research'")).scalar()==46
+    assert repo.import_research(ROOT,database)==0
+    assert repo.import_research(ROOT,database)==0
+    assert len(repo.reports_frame(database))==47
+    # Wirklichen Dashboard-Server zweimal in eigenen Prozessen auf freiem Port starten.
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+    env={**os.environ,'SERVICEPULSE_DATABASE_URL':database.url.render_as_string(hide_password=False)}
+    with tempfile.TemporaryFile() as log:
+        for _ in range(2):
+            process=subprocess.Popen([sys.executable,'-m','streamlit','run',str(ROOT/'app.py'),'--server.address','127.0.0.1','--server.port',str(port),'--server.headless','true'],cwd=ROOT,env=env,stdout=log,stderr=log,stdin=subprocess.DEVNULL)
+            try:
+                deadline=time.monotonic()+45
+                while True:
+                    try:
+                        with urllib.request.urlopen(f'http://127.0.0.1:{port}/_stcore/health',timeout=2) as response:
+                            assert response.read()==b'ok'
+                        break
+                    except OSError:
+                        if process.poll() is not None or time.monotonic()>deadline:raise AssertionError('Isolierter Dashboard-Start fehlgeschlagen')
+                        time.sleep(.2)
+            finally:
+                if os.name=='nt':subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True)
+                else:process.terminate()
+                process.wait(timeout=15)
+    # Frischer Dashboardzustand nach den beiden tatsächlichen Server-Prozessstarts.
+    app=AppTest.from_file(str(ROOT/'app.py'),default_timeout=60).run()
+    assert not app.exception and app.metric[0].value=='47'
+    app.selectbox(key='managed_device').set_value('999992').run()
+    assert any('Künstlicher isolierter Testbericht' in frame.value.astype(str).to_string() for frame in app.dataframe)
+    app.radio(key='report_mode').set_value('Bestehenden Bericht bearbeiten').run()
+    next(w for w in app.text_area if w.label=='Reparatur oder Wartungsmaßnahme (optional)').set_value('Isolierte Testmaßnahme')
+    next(w for w in app.selectbox if w.label=='Status').set_value('abgeschlossen')
+    next(w for w in app.text_input if w.label=='Grund der Änderung').set_value('Änderungshistorie prüfen')
+    next(b for b in app.button if b.label=='Änderungen speichern').click().run()
+    assert not app.exception and not app.error
+    assert [w.value for w in app.metric[:4]]==['47','25','11','5']
+    changes=repo.history(saved.id,database)
+    assert len(changes)==2 and changes[-1]['Version']==2
+    assert changes[-1]['Vorher']['status']=='offen'
+    assert changes[-1]['Nachher']['status']=='abgeschlossen'
+    assert changes[-1]['Nachher']['action']=='Isolierte Testmaßnahme'
+    assert changes[-1]['Grund']=='Änderungshistorie prüfen'
+    pd.testing.assert_frame_equal(original,repo.reports_frame(database,True))
+    assert repo.files_frame(database).empty

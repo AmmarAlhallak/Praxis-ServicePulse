@@ -1,5 +1,7 @@
 # Prüfbericht der PostgreSQL-Weiterentwicklung
 
+**Aktueller Nachtest am 30.10.2026:** 47 Tests bestanden, ohne Fehler oder übersprungene Tests. Die Schreibtests haben jetzt eine eigene temporäre PostgreSQL-Instanz; neuer Gesamtfall für Geräteanlage, Bericht, Dashboard-Prozessneustarts, Bearbeitung, Statistik und Herkunftstrennung. Neues Formular standardmäßig verborgen, historische Fehlangaben als „Nicht dokumentiert“. [Vollständiger aktueller Prüfbericht](geraeteverwaltung_pruefung.md). Die folgenden Zahlen mit 45 Tests dokumentieren den vorherigen Entwicklungsstand.
+
 Ausgeführt am 30.10.2026 auf dem vorhandenen Windows-Laptop, Python-Umgebung des bestehenden Projekts. Kein neuer Projektordner. Entwicklungsbranch: `development/postgresql-service-management`.
 
 ## Nachgewiesene Ergebnisse

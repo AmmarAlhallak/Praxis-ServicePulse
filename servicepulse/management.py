@@ -12,6 +12,9 @@ def report_table(frame):
     view.event_date=view.event_date.dt.strftime('%d.%m.%Y').fillna('Nicht angegeben')
     view.category=view.category.map(category_label)
     view.fault_text=[fault_label(r.fault_text) if r.origin=='research' else (r.fault_text or 'Nicht angegeben') for r in frame.itertuples()]
+    historical=view.origin.eq('research')
+    view.loc[historical & view.action.fillna('').str.strip().eq(''),'action']='Nicht dokumentiert'
+    view.loc[historical & view.status.fillna('').str.strip().isin(['','nicht angegeben']),'status']='Nicht dokumentiert'
     view.origin=view.origin.map({'research':'Veröffentlichte Forschungsdaten','manual':'Selbst erfasst'})
     view=view.rename(columns={'device_id':'Geräte-ID','event_date':'Servicedatum','category':'Fehlerkategorie','fault_text':'Beschreibung','status':'Status','origin':'Herkunft','action':'Maßnahme'})
     st.dataframe(view,hide_index=True,width='stretch')
@@ -19,6 +22,17 @@ def report_table(frame):
 def report_form(device,frame):
     mode=st.radio('Servicebericht',['Neuen Bericht erfassen','Bestehenden Bericht bearbeiten'],horizontal=True,key='report_mode')
     editing=mode=='Bestehenden Bericht bearbeiten'
+    open_key=f'new_report_open_{device}'
+    if not editing:
+        if not st.session_state.get(open_key,False):
+            if st.button('Neuen Servicebericht erfassen',key=f'open_new_report_{device}',type='primary'):
+                st.session_state[open_key]=True
+            else:
+                st.caption('Die Eingabemaske öffnet sich erst über den Knopf. Vorhandene Berichte bleiben oben sichtbar.')
+                return
+        if st.button('Formular schließen',key=f'close_new_report_{device}'):
+            st.session_state[open_key]=False
+            st.rerun()
     existing=None;rid=None
     if editing:
         if frame.empty:
@@ -50,8 +64,8 @@ def report_form(device,frame):
         cat=st.selectbox('Fehlerkategorie',category_options,index=category_options.index(current),format_func=category_label,key=f'report_category_{suffix}')
         description=st.text_area('Beschreibung der Störung',value=value('fault_text'),key=f'report_description_{suffix}',help='Freitext; die originale englische Beschreibung eines Forschungsberichts bleibt zusätzlich unverändert erhalten.')
         component=st.text_input('Betroffene Komponente (optional)',value=value('component'),key=f'report_component_{suffix}')
-        action=st.text_area('Reparatur oder Wartungsmaßnahme (optional)',value=value('action'),key=f'report_action_{suffix}')
-        status=st.selectbox('Status',repo.STATUSES,index=repo.STATUSES.index(value('status','offen')),key=f'report_status_{suffix}')
+        action=st.text_area('Reparatur oder Wartungsmaßnahme (optional)',value=value('action'),key=f'report_action_{suffix}',placeholder='Nicht dokumentiert' if editing and existing.origin=='research' else None)
+        status=st.selectbox('Status',repo.STATUSES,index=repo.STATUSES.index(value('status','offen')),key=f'report_status_{suffix}',format_func=lambda v:'Nicht dokumentiert' if editing and existing.origin=='research' and v=='nicht angegeben' else v)
         notes=st.text_area('Bemerkungen (optional)',value=value('notes'),key=f'report_notes_{suffix}')
         source=st.text_input('Quelle / Herkunft',value=value('source_file'),disabled=editing,key=f'report_source_{suffix}',help='Zum Beispiel eigener Wartungsbericht. Wenn unbekannt: „Nicht bekannt“. Die Erstquelle bleibt bei Bearbeitungen erhalten; Ergänzungen gehören in Bemerkungen.')
         actor=st.text_input('Bearbeiter (optional)',key=f'report_actor_{suffix}')
@@ -64,6 +78,7 @@ def report_form(device,frame):
             st.session_state.pop('report_request',None)
             if editing:st.session_state.pop(f'edit_version_{rid}',None)
             st.session_state[f'form_generation_{rid}']=st.session_state.get(f'form_generation_{rid}',0)+1
+            if not editing:st.session_state[open_key]=False
             st.session_state['saved_report']=saved;st.rerun()
         except ValueError as exc:st.error(str(exc))
         except Exception:st.error('Der Bericht wurde nicht gespeichert. Bitte Datenbankverbindung prüfen und erneut versuchen.')

@@ -7,7 +7,7 @@ Stand 30.10.2026. Bestehender Arbeitsordner: `C:\Users\ammar\Downloads\fault_sum
 1. `start.cmd` doppelt anklicken oder in VS Code `ServicePulse.code-workspace` öffnen und F5 drücken.
 2. Die Vorbereitung meldet „PostgreSQL bereit“. Browser unter http://127.0.0.1:8501 öffnen. Auf diesem Laptop sind die Forschungsdaten bereits importiert.
 3. **Geräte & Serviceberichte** öffnen, Gerät suchen und auswählen.
-4. Im Formular einen Bericht erfassen. Nur Gerät und Herkunft sind erforderlich. Unbekannte Herkunft ausdrücklich als „Nicht bekannt“ angeben; andere fehlende Felder bleiben gekennzeichnet.
+4. Den hervorgehobenen Knopf **Neuen Servicebericht erfassen** wählen, um die standardmäßig verborgene Maske zu öffnen. Nur Gerät und Herkunft sind erforderlich. Unbekannte Herkunft ausdrücklich als „Nicht bekannt“ angeben; andere fehlende Felder bleiben gekennzeichnet.
 5. **Servicebericht speichern** wählen. Bestätigung, Historie und Kennzahlen aktualisieren sich. Aktive Servicefilter können einen neuen Bericht aus der gefilterten Übersicht ausschließen; gegebenenfalls „Alle Filter zurücksetzen“ wählen.
 6. Zum Bearbeiten „Bestehenden Bericht bearbeiten“ wählen und einen Änderungsgrund angeben. Bei einem Konflikt „Aktuellen Bericht neu laden“ verwenden. Erstquelle und historische Originalzeile bleiben erhalten.
 7. Unter **Betriebsanalyse & Vergleiche** bei vorhandenen Messdaten eine Kurve öffnen. Ein neuer Bericht erzeugt keine Messpunkte.
