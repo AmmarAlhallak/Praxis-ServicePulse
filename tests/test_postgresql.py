@@ -303,3 +303,44 @@ def test_new_device_report_full_flow_and_dashboard_restart(database,monkeypatch)
     assert changes[-1]['Grund']=='Änderungshistorie prüfen'
     pd.testing.assert_frame_equal(original,repo.reports_frame(database,True))
     assert repo.files_frame(database).empty
+
+def test_transaction_failure_rolls_back_report_source_and_audit(database):
+    # Zusätzliche Fehlerbedingung ausschließlich in der temporären Testdatenbank.
+    with database.begin() as c:
+        c.execute(text("ALTER TABLE service_actions ADD CONSTRAINT test_rejected_action CHECK (text <> 'rollback fixture')"))
+    def counts():
+        with database.connect() as c:
+            return [c.execute(text(f'SELECT count(*) FROM {table}')).scalar() for table in ['service_reports','sources','audit_log','service_actions']]
+    before=counts();values=data();values['action']='rollback fixture'
+    try:
+        with pytest.raises(DBAPIError):repo.save_report(values,db=database)
+        assert counts()==before
+    finally:
+        with database.begin() as c:c.execute(text('ALTER TABLE service_actions DROP CONSTRAINT test_rejected_action'))
+
+def test_concurrent_edits_do_not_overwrite(database):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    rid=repo.save_report(data(),db=database);ready=Barrier(2)
+    def edit(label):
+        values=data();values.update(description=label,action='  '+label+'  ')
+        ready.wait(timeout=10)
+        try:repo.save_report(values,rid,1,db=database);return 'saved'
+        except ValueError:return 'conflict'
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        assert sorted(executor.map(edit,['first','second']))==['conflict','saved']
+    frame=repo.reports_frame(database);row=frame.loc[frame.report_id.eq(rid)].iloc[0]
+    log=repo.history(rid,database)
+    assert len(log)==2 and row.report_version==2
+    assert log[-1]['Nachher']['action']==row.action
+
+def test_migrations_match_models_and_empty_reports_have_stable_columns(database):
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+    from servicepulse.models import Base
+    with database.connect() as c:
+        assert compare_metadata(MigrationContext.configure(c),Base.metadata)==[]
+    with database.begin() as c:
+        c.execute(text('TRUNCATE audit_log,service_actions,service_reports RESTART IDENTITY CASCADE'))
+    frame=repo.reports_frame(database)
+    assert frame.empty and {'status','action','component','report_version','notes'}.issubset(frame.columns)

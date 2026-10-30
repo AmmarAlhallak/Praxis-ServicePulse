@@ -121,7 +121,7 @@ def reports_frame(db=None,originals=False):
             records.append(row)
     frame=pd.DataFrame(records)
     if frame.empty:
-        frame=pd.DataFrame(columns=['device_id','event_date','category','fault_text','device_valid','category_group','no_fix','duplicate','date_precision','source_row','source_sheet','source_file','report_id','origin','category_raw','freezer_id','registered_date','main_fault','Fault categories'])
+        frame=pd.DataFrame(columns=['device_id','event_date','category','fault_text','device_valid','category_group','no_fix','duplicate','date_precision','source_row','source_sheet','source_file','report_id','report_version','origin','status','action','component','notes','category_raw','freezer_id','registered_date','main_fault','Fault categories'])
     for col in ['event_date','registered_date']:
         if col in frame:frame[col]=pd.to_datetime(frame[col],format='ISO8601',errors='coerce')
     return frame
@@ -158,7 +158,7 @@ def save_report(data,report_id=None,expected_version=None,request_key=None,db=No
         with Session(db or engine()) as session,session.begin():
             session.execute(text('SELECT pg_advisory_xact_lock(73210646)'))
             if session.get(Device,data['device_id']) is None:raise ValueError('Gerät bitte zuerst anlegen.')
-            context(session,data.get('actor') or 'Lokale Bedienung',data['reason'],data.get('action',''))
+            context(session,data.get('actor') or 'Lokale Bedienung',data['reason'],data.get('action','').strip())
             category_id=category(session,data.get('category') or 'Unbekannt').id
             if report_id is None:
                 key='manual:'+str(request_key or uuid.uuid4())

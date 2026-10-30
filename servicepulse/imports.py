@@ -5,6 +5,7 @@ import re
 import hashlib
 import pyarrow as pa
 import pyarrow.parquet as pq
+from servicepulse.measurements import validate_time_column
 
 def import_parquet(content, filename, directory, registry=None, source=None):
     if not re.fullmatch(r'\d{6}_(temp|events)\.parquet',filename):
@@ -15,8 +16,7 @@ def import_parquet(content, filename, directory, registry=None, source=None):
         schema = pq.ParquetFile(io.BytesIO(content)).schema_arrow
     except Exception as exc:
         raise ValueError('Die Datei ist keine lesbare Parquet-Datei.') from exc
-    if 'Datetime' not in schema.names or not pa.types.is_timestamp(schema.field('Datetime').type):
-        raise ValueError('Die Datei benötigt die Originalspalte Datetime im Zeitstempelformat.')
+    validate_time_column(schema)
     if filename.endswith('_temp.parquet') and not any(
         (pa.types.is_integer(field.type) or pa.types.is_floating(field.type) or pa.types.is_decimal(field.type))
         and field.name not in {'index','__index_level_0__','State'} for field in schema):

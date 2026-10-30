@@ -1,5 +1,5 @@
 """Relationaler Servicebestand; Messwerte verbleiben ausschließlich in Parquet."""
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy import String, Text, Date, DateTime, Integer, BigInteger, ForeignKey, CheckConstraint, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,7 +34,7 @@ class Report(Base):
     device_id: Mapped[str] = mapped_column(ForeignKey('devices.id'),index=True)
     category_id: Mapped[int] = mapped_column(ForeignKey('categories.id'))
     source_id: Mapped[int] = mapped_column(ForeignKey('sources.id'))
-    service_date: Mapped[datetime | None] = mapped_column(Date,index=True)
+    service_date: Mapped[date | None] = mapped_column(Date,index=True)
     description: Mapped[str] = mapped_column(Text,default='')
     component: Mapped[str] = mapped_column(Text,default='')
     status: Mapped[str] = mapped_column(String(30),default='offen')

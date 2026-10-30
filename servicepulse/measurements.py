@@ -9,16 +9,20 @@ import pyarrow as pa
 def quote_identifier(name):
     return '"' + name.replace('"', '""') + '"'
 
+def validate_time_column(schema: pa.Schema) -> None:
+    """Prüft die gemeinsame Zeitbasis; keine stillschweigende Zeitzonenumdeutung."""
+    if 'Datetime' not in schema.names or not pa.types.is_timestamp(schema.field('Datetime').type):
+        raise ValueError('Datetime muss als Zeitstempel gespeichert sein.')
+    if schema.field('Datetime').type.tz is not None:
+        raise ValueError('Zeitstempel mit Zeitzone benötigen vor dem Import eine ausdrücklich dokumentierte Zeitumrechnung. Die Forschungszeitbasis hat keine bestätigte Zeitzone.')
+
 def inspect_file(path):
     path = Path(path)
     match = re.fullmatch(r'(\d{6})_(temp|events)\.parquet', path.name)
     if not match:
         raise ValueError('Dateiname muss <sechsstellige Geräte-ID>_temp.parquet oder _events.parquet entsprechen.')
     schema = pq.ParquetFile(path)
-    if 'Datetime' not in schema.schema_arrow.names:
-        raise ValueError('Spalte Datetime fehlt.')
-    if not pa.types.is_timestamp(schema.schema_arrow.field('Datetime').type):
-        raise ValueError('Datetime muss als Zeitstempel gespeichert sein.')
+    validate_time_column(schema.schema_arrow)
     if match[2] == 'temp' and not any((pa.types.is_integer(field.type) or pa.types.is_floating(field.type) or pa.types.is_decimal(field.type)) and field.name not in ['index','__index_level_0__','State'] for field in schema.schema_arrow):
         raise ValueError('Temperaturdatei enthält keine numerische Messgröße.')
     return dict(path=str(path.resolve()), device_id=match[1], kind=match[2],

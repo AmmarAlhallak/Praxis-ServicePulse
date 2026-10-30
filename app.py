@@ -59,11 +59,11 @@ try:
     df = repo.reports_frame()
     original_df = repo.reports_frame(originals=True)
     registered_devices = repo.devices_frame()
+    files=repo.files_frame()
 except Exception as exc:
     st.error('Die Service-Datenbank ist nicht erreichbar. Bitte das Programm über start.cmd oder F5 starten. Es werden keine veralteten Excel-Daten als aktueller Stand angezeigt.')
     technical_error(exc)
     st.stop()
-files=repo.files_frame()
 file_errors=[{'path':p,'error':'Registrierte Datei fehlt lokal'} for p in files.path if not Path(p).exists()]
 files=files.loc[files.path.map(lambda p:Path(p).exists()).astype(bool)].copy()
 reference = ROOT/'research/reference/data/raw_data/other_data/freezer_faults.csv'

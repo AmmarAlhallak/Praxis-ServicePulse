@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 ROOT = Path(__file__).resolve().parents[1]
 
 @lru_cache
-def engine():
+def engine() -> Engine:
+    """Liefert den wiederverwendeten Verbindungspool aus der lokalen Konfiguration."""
     load_dotenv(ROOT/'.env')
     url = os.environ.get('SERVICEPULSE_DATABASE_URL')
     if not url:
