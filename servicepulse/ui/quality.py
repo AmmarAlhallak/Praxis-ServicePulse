@@ -18,6 +18,7 @@ from servicepulse.research import (
     read_test_report,
 )
 from servicepulse.ui.common import table
+from servicepulse.ui.data_management import render_imports
 
 
 def render_quality(
@@ -327,3 +328,5 @@ def render_quality(
                 "docs/datenanalyse.md\ndocs/repository_pruefung.md\ndocs/lizenzen_herkunft.md\ndocs/technik_sql.md",
                 language=None,
             )
+
+    render_imports(files, root)

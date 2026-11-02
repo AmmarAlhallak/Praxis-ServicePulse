@@ -77,6 +77,10 @@ def test_combined_dashboard_filters_device_analysis_charts_and_reset():
     if (ROOT / "data/raw/Revco/806279_temp.parquet").exists():
         assert len(curves) == 1
         assert len(curves[0]["layout"]["shapes"]) == 1
+        traces = {trace["name"]: trace for trace in curves[0]["data"]}
+        assert traces["Mittelwert"].get("visible", True) is True
+        assert traces["Minimum"]["visible"] == "legendonly"
+        assert traces["Maximum"]["visible"] == "legendonly"
     next(
         button for button in app.button if button.label == "Alle Filter zurücksetzen"
     ).click().run()

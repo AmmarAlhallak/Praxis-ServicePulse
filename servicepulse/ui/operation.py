@@ -5,9 +5,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from servicepulse import repository as repo
 from servicepulse.case_review import review_temperature
-from servicepulse.imports import import_parquet
 from servicepulse.measurements import (
     event_window,
     numeric_columns,
@@ -75,6 +73,7 @@ def render_operation(
             on_click=choose_demo,
             args=(code,),
             disabled=not available,
+            type="primary" if code == "temperature" else "secondary",
             width="stretch",
             help=f"Gerät {example_device}, {pd.Timestamp(example_date):%d.%m.%Y}, Kammertemperatur und sieben Tage je Vergleichsfenster. Verwendet die gesamte Servicequelle, ohne die Servicefilter links zu ändern.",
         )
@@ -171,6 +170,9 @@ def render_operation(
                     chosen_date + pd.Timedelta(days=days + 1),
                 )
                 if device == "806031" and chosen_date == pd.Timestamp("2023-02-03"):
+                    st.info(
+                        "Originalzuordnung: Die Excel-Zeile 22 enthält die Kategorie „Bad insulation“ und den Anlass „filter_drier“. Diese ungewöhnliche Kombination wurde unverändert übernommen; sie ist fachlich zu klären."
+                    )
                     st.warning(
                         "Datumswiderspruch: Excel nennt den 03.02.2023, Autorenliste und Auftragsdatum im Bericht den 02.03.2023. Das Excel-Datum wurde nicht automatisch verändert."
                     )
@@ -246,12 +248,15 @@ def render_operation(
                         marks = candidates[
                             (candidates.event_date >= start) & (candidates.event_date < end)
                         ]
-                        chart(
-                            measurement_figure(curve, measure, bucket, marks.event_date.unique()),
-                            "measurement_curve",
+                        figure = measurement_figure(
+                            curve, measure, bucket, marks.event_date.unique()
                         )
+                        for trace in figure.data:
+                            if trace.name in {"Minimum", "Maximum"}:
+                                trace.visible = "legendonly"
+                        chart(figure, "measurement_curve")
                         st.caption(
-                            "Mittelwert: Durchschnitt der vorhandenen Messwerte. Minimum und Maximum: kleinster und größter Wert je Intervall. Leere Intervalle bleiben Lücken; die Kurve enthält keine erfundenen Zwischenwerte."
+                            "Gezeigt wird der Mittelwert. Minimum und Maximum lassen sich durch Anklicken in der Legende einblenden. Leere Intervalle bleiben sichtbare Lücken; es werden keine Zwischenwerte erfunden."
                         )
                         st.download_button(
                             "Messverlauf als CSV herunterladen",
@@ -272,32 +277,6 @@ def render_operation(
                             st.write(
                                 f"Tatsächlich gemessen: {int(warm.rows)} Werte über +15 °C, von {warm.first_time:%d.%m.%Y %H:%M} bis {warm.last_time:%d.%m.%Y %H:%M}; höchster Wert {german_number(warm.maximum, 2)} °C. Das anschließende Abkühlen ist beobachtbar; eine Ursache ist damit nicht bewiesen."
                             )
-                        event_paths = files[files.device_id.eq(device) & files.kind.eq("events")]
-                        clock_source = (
-                            root / "research/reference/data/raw_data/other_data/time_offsets.csv"
-                        )
-                        if len(event_paths) == 1 and clock_source.exists():
-                            clock_offset = offsets(clock_source).get(device)
-                            if clock_offset is not None:
-                                power = event_window(
-                                    event_paths.iloc[0].path, start, end, clock_offset
-                                )
-                                power = power[power.Event.isin(["Shutdown", "Display Power On"])]
-                                if not power.empty:
-                                    labels = {
-                                        "Shutdown": "Abschaltung gemeldet",
-                                        "Display Power On": "Einschalten der Anzeige gemeldet",
-                                    }
-                                    st.info(
-                                        "Geräteprotokoll: "
-                                        + "; ".join(
-                                            (
-                                                f"{row.Datetime:%d.%m.%Y %H:%M:%S}: {labels[row.Event]}"
-                                                for row in power.itertuples()
-                                            )
-                                        )
-                                        + ". Zugeordnet mit der konstanten Autoren-Uhrkorrektur. Das belegt keine Ursache der Lücke und keine Reparaturwirkung."
-                                    )
                         with st.expander(
                             "Expertenansicht · Nachprüfung 806279, Lücken und Betriebskennzeichen"
                         ):
@@ -369,6 +348,38 @@ def render_operation(
                     event_files = files[files.device_id.eq(device) & files.kind.eq("events")]
                     offpath = root / "research/reference/data/raw_data/other_data/time_offsets.csv"
                     with st.expander("Expertenansicht · Geräteereignisse und Uhrkorrektur"):
+                        if device == "806279" and measure == "RTD":
+                            event_paths = files[
+                                files.device_id.eq(device) & files.kind.eq("events")
+                            ]
+                            clock_source = (
+                                root
+                                / "research/reference/data/raw_data/other_data/time_offsets.csv"
+                            )
+                            if len(event_paths) == 1 and clock_source.exists():
+                                clock_offset = offsets(clock_source).get(device)
+                                if clock_offset is not None:
+                                    power = event_window(
+                                        event_paths.iloc[0].path, start, end, clock_offset
+                                    )
+                                    power = power[
+                                        power.Event.isin(["Shutdown", "Display Power On"])
+                                    ]
+                                    if not power.empty:
+                                        labels = {
+                                            "Shutdown": "Abschaltung gemeldet",
+                                            "Display Power On": "Einschalten der Anzeige gemeldet",
+                                        }
+                                        st.info(
+                                            "Geräteprotokoll: "
+                                            + "; ".join(
+                                                (
+                                                    f"{row.Datetime:%d.%m.%Y %H:%M:%S}: {labels[row.Event]}"
+                                                    for row in power.itertuples()
+                                                )
+                                            )
+                                            + ". Zugeordnet mit der konstanten Autoren-Uhrkorrektur. Das belegt keine Ursache der Lücke und keine Reparaturwirkung."
+                                        )
                         st.caption(
                             "Gerätemeldungen wie Türöffnungen sind keine zusätzlichen Serviceeinträge. Bis zu 1.000 Originalmeldungen; diese werden zur Nachprüfbarkeit nicht automatisch übersetzt."
                         )
@@ -401,51 +412,3 @@ def render_operation(
                         "Die Messdaten konnten für diese Auswahl nicht ausgewertet werden. Bitte eine andere Messgröße oder einen anderen Zeitraum wählen und die Datenqualität prüfen."
                     )
                     technical_error(exc)
-    with st.expander("Erweiterte Funktion · Weitere Messdateien importieren"):
-        st.write(
-            f"Es sind bereits **{len(files)} veröffentlichte bzw. lokal ergänzte Messdateien** verfügbar. Im geprüften Forschungsbestand sind es 106. Für die normale Nutzung ist kein erneuter Import nötig."
-        )
-        st.caption(
-            "Parquet ist das Dateiformat der Betriebsmessdaten. Nur zum Ergänzen weiterer Dateien verwenden. Vorhandene Dateien werden nicht überschrieben."
-        )
-        st.markdown(
-            "Dateiname beispielsweise `806279_temp.parquet` für Messwerte oder `806279_events.parquet` für Meldungen. Herkunft und Lizenz zusätzlicher Dateien separat dokumentieren. Temperaturdateien müssen bereits zeitkorrigiert sein, Meldungsdateien die interne Gerätezeit der Autorenpipeline verwenden."
-        )
-        upload_source = st.text_input(
-            "Herkunft und Nutzungsrecht der Messdatei",
-            key="measurement_source",
-            help="Bitte Quelle und Berechtigung zur Nutzung dokumentieren.",
-        )
-        upload = st.file_uploader(
-            "Messdatei auswählen (Parquet, höchstens 300 MB)", type="parquet", key="parquet_upload"
-        )
-        if upload is not None and st.button("Datei prüfen und importieren", key="import_parquet"):
-            try:
-                destination, digest = import_parquet(
-                    upload.getvalue(),
-                    upload.name,
-                    root / "data/raw/imported",
-                    registry=repo.file_digests(),
-                    source=upload_source,
-                )
-                try:
-                    repo.register_file(destination, upload_source)
-                except Exception:
-                    destination.unlink()
-                    raise
-                st.session_state["import_success"] = destination.name
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
-            except Exception as exc:
-                st.error(
-                    "Die Datei konnte nicht gespeichert werden. Bitte Speicherplatz und Schreibrechte prüfen."
-                )
-                technical_error(exc)
-        if "import_success" in st.session_state:
-            st.success(
-                f"Datei erfolgreich geprüft und übernommen: {st.session_state.pop('import_success')}"
-            )
-        st.caption(
-            "Größere Dateien nach der lokalen Importanleitung in docs/datenimport.md direkt nach data/raw/<Modell>/ kopieren. Danach den Qualitätsbericht neu erstellen."
-        )

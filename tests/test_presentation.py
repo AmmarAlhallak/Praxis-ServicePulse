@@ -25,6 +25,11 @@ def test_real_translations_cover_source_and_preserve_originals():
     original = frame.copy(deep=True)
     assert set(frame.category).issubset(CATEGORIES)
     assert set(frame.fault_text).issubset(FAULTS)
+    source_row = frame.loc[frame.source_row.eq(22)].iloc[0]
+    assert source_row.device_id == "806031"
+    assert source_row.event_date == pd.Timestamp("2023-02-03")
+    assert source_row["Fault categories"] == "Bad insulation"
+    assert source_row.main_fault == "filter_drier"
     display = display_frame(frame[["device_id", "event_date", "category", "fault_text"]])
     assert list(display.columns) == [
         "Geräte-ID",
@@ -159,7 +164,9 @@ def test_german_sections_and_preserved_metrics():
     assert "Kältemittelleckage" in app.multiselect(key="categories").format_func(
         "Refrigerant leakage"
     )
-    assert any(expander.label.startswith("Erweiterte Funktion") for expander in app.expander)
+    assert any("Weitere Messdateien importieren" in expander.label for expander in app.expander)
+    assert not app.tabs[2].get("file_uploader")
+    assert len(app.tabs[3].get("file_uploader")) == 1
     if not any(widget.key == "measurement_device" for widget in app.selectbox):
         return
     assert all(
