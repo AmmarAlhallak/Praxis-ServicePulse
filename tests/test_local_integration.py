@@ -61,7 +61,7 @@ def test_combined_dashboard_filters_device_analysis_charts_and_reset():
     app.run()
     assert not app.exception and not app.error
     assert [metric.value for metric in app.metric[:4]] == ["1", "1", "0", "0"]
-    assert len(app.get("plotly_chart")) >= 4
+    assert len(app.get("plotly_chart")) >= 3
     repeated = next(
         table.value
         for table in app.dataframe

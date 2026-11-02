@@ -123,6 +123,39 @@ def test_german_sections_and_preserved_metrics():
         "Datenqualität & Forschung",
     ]
     assert [metric.value for metric in app.metric[:4]] == ["46", "24", "11", "5"]
+
+    import base64
+    import json
+
+    import numpy as np
+
+    def category_chart():
+        charts = [json.loads(chart.proto.spec) for chart in app.get("plotly_chart")]
+        matches = [
+            chart
+            for chart in charts
+            if chart.get("layout", {}).get("yaxis", {}).get("title", {}).get("text")
+            == "Fehlerkategorie"
+        ]
+        assert len(matches) == 1
+        return matches[0]
+
+    def bar_total(specification):
+        values = specification["data"][0]["x"]
+        if isinstance(values, dict):
+            values = np.frombuffer(base64.b64decode(values["bdata"]), dtype=values["dtype"])
+        return sum(values)
+
+    assert app.toggle(key="group_categories").value
+    grouped = category_chart()
+    assert bar_total(grouped) == 46
+    app.toggle(key="group_categories").set_value(False).run()
+    assert not app.exception and not app.error
+    original = category_chart()
+    assert bar_total(original) == 46
+    assert len(original["data"][0]["y"]) > len(grouped["data"][0]["y"])
+    assert [metric.value for metric in app.metric[:4]] == ["46", "24", "11", "5"]
+
     assert "Kältemittelleckage" in app.multiselect(key="categories").format_func(
         "Refrigerant leakage"
     )
