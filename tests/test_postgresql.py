@@ -181,7 +181,7 @@ def test_management_form_updates_statistics_and_history(database, monkeypatch):
     assert app.metric[0].value == "47"
     assert any("dauerhaft gespeichert" in v.value for v in app.success)
     assert len(repo.reports_frame(database)) == 47
-    app.radio(key="report_mode").set_value("Bestehenden Bericht bearbeiten").run()
+    app.button(key="open_edit_report_806279").click().run()
     assert not app.exception
     latest = int(repo.reports_frame(database).report_id.max())
     app.selectbox(key="edit_report_806279").set_value(latest).run()
@@ -357,6 +357,10 @@ def test_collapsed_form_and_historical_missingness_are_display_only(database, mo
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
     assert not app.exception
     assert not any(w.label == "Beschreibung der Störung" for w in app.text_area)
+    assert not any(w.key == "report_mode" for w in app.radio)
+    listing = next(w.value for w in app.dataframe if "Standort" in w.value)
+    assert listing.Bezeichnung.eq("Nicht dokumentiert").all()
+    assert listing.Standort.eq("Nicht dokumentiert").all()
     tables = [w.value for w in app.dataframe if "Herkunft" in w.value and "Maßnahme" in w.value]
     assert tables
     for frame in tables:
@@ -367,10 +371,31 @@ def test_collapsed_form_and_historical_missingness_are_display_only(database, mo
     assert any(w.label == "Beschreibung der Störung" for w in app.text_area)
     app.button(key="close_new_report_806279").click().run()
     assert not any(w.label == "Beschreibung der Störung" for w in app.text_area)
-    app.radio(key="report_mode").set_value("Bestehenden Bericht bearbeiten").run()
+    app.button(key="open_edit_report_806279").click().run()
+    assert not any(w.label == "Beschreibung der Störung" for w in app.text_area)
+    assert any("Original ist schreibgeschützt" in w.value for w in app.warning)
+    rid = app.selectbox(key="edit_report_806279").value
+    app.checkbox(key=f"enable_research_edit_806279_{rid}").check().run()
     status = next(w for w in app.selectbox if w.label == "Status")
     assert status.value == "nicht angegeben" and "Nicht dokumentiert" in status.options
     pd.testing.assert_frame_equal(before, repo.reports_frame(database))
+    originals = repo.reports_frame(database, originals=True)
+    next(w for w in app.text_area if w.label == "Beschreibung der Störung").set_value(
+        "Explizite Arbeitsfassung ausschließlich in der Testdatenbank"
+    )
+    next(w for w in app.text_input if w.label == "Grund der Änderung").set_value(
+        "Kennzeichnung der Forschungs-Arbeitsfassung prüfen"
+    )
+    next(b for b in app.button if b.label == "Arbeitsfassung speichern").click().run()
+    assert not app.exception and not app.error
+    assert not any(w.label == "Beschreibung der Störung" for w in app.text_area)
+    pd.testing.assert_frame_equal(originals, repo.reports_frame(database, originals=True))
+    assert len(repo.history(rid, database)) == 2
+    assert any(
+        "Forschungsdaten · Arbeitsfassung" in w.value.Herkunft.tolist()
+        for w in app.dataframe
+        if "Herkunft" in w.value
+    )
 
 
 def test_new_device_report_full_flow_and_dashboard_restart(database, monkeypatch):
@@ -479,7 +504,7 @@ def test_new_device_report_full_flow_and_dashboard_restart(database, monkeypatch
         "Künstlicher isolierter Testbericht" in frame.value.astype(str).to_string()
         for frame in app.dataframe
     )
-    app.radio(key="report_mode").set_value("Bestehenden Bericht bearbeiten").run()
+    app.button(key="open_edit_report_999992").click().run()
     next(
         w for w in app.text_area if w.label == "Reparatur oder Wartungsmaßnahme (optional)"
     ).set_value("Isolierte Testmaßnahme")

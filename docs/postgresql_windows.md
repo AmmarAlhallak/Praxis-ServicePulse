@@ -9,7 +9,7 @@ Stand 30.10.2026. Bestehender Arbeitsordner: `C:\Users\ammar\Downloads\fault_sum
 3. **Geräte & Serviceberichte** öffnen, Gerät suchen und auswählen.
 4. Den hervorgehobenen Knopf **Neuen Servicebericht erfassen** wählen, um die standardmäßig verborgene Maske zu öffnen. Nur Gerät und Herkunft sind erforderlich. Unbekannte Herkunft ausdrücklich als „Nicht bekannt“ angeben; andere fehlende Felder bleiben gekennzeichnet.
 5. **Servicebericht speichern** wählen. Bestätigung, Historie und Kennzahlen aktualisieren sich. Aktive Servicefilter können einen neuen Bericht aus der gefilterten Übersicht ausschließen; gegebenenfalls „Alle Filter zurücksetzen“ wählen.
-6. Zum Bearbeiten „Bestehenden Bericht bearbeiten“ wählen und einen Änderungsgrund angeben. Bei einem Konflikt „Aktuellen Bericht neu laden“ verwenden. Erstquelle und historische Originalzeile bleiben erhalten.
+6. „Bericht bearbeiten“ wählen und einen Änderungsgrund angeben. Bei Forschungsberichten zunächst „Arbeitsfassung dieses Forschungsberichts bearbeiten“ aktivieren; das Original bleibt schreibgeschützt. Bei einem Konflikt „Aktuellen Bericht neu laden“ verwenden. Erstquelle und historische Originalzeile bleiben erhalten.
 7. Unter **Betriebsanalyse & Vergleiche** bei vorhandenen Messdaten eine Kurve öffnen. Ein neuer Bericht erzeugt keine Messpunkte.
 
 Neue Geräte über **Neues Gerät anlegen** erfassen. Die ID muss eindeutig sein und sechs Ziffern enthalten. PDF-Anhänge und eine Löschfunktion sind nicht implementiert.

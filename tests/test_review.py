@@ -63,7 +63,7 @@ def test_history_database_outage_has_no_unhandled_exception(monkeypatch):
 
     monkeypatch.setattr(repo, "history", unavailable)
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
-    app.radio(key="report_mode").set_value("Bestehenden Bericht bearbeiten").run()
+    app.button(key="open_edit_report_806279").click().run()
     assert not app.exception
     assert any("Datenbank ist nicht erreichbar" in error.value for error in app.error)
     assert all("NEVER_DISPLAY_TEST_PASSWORD" not in code.value for code in app.code)

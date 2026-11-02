@@ -42,33 +42,33 @@ def report_table(frame: pd.DataFrame) -> None:
             "action": "Maßnahme",
         }
     )
+    if "report_version" in frame:
+        view.loc[historical & frame.report_version.gt(1), "Herkunft"] = (
+            "Forschungsdaten · Arbeitsfassung"
+        )
     st.dataframe(view, hide_index=True, width="stretch")
 
 
 def report_form(device: str, frame: pd.DataFrame) -> None:
     """Zeigt ein geschlossenes Anlageformular oder eine versionierte Bearbeitung mit Historie."""
-    mode = st.radio(
-        "Servicebericht",
-        ["Neuen Bericht erfassen", "Bestehenden Bericht bearbeiten"],
-        horizontal=True,
-        key="report_mode",
-    )
-    editing = mode == "Bestehenden Bericht bearbeiten"
+    panel_key = f"report_panel_{device}"
     open_key = f"new_report_open_{device}"
-    if not editing:
-        if not st.session_state.get(open_key, False):
-            if st.button(
-                "Neuen Servicebericht erfassen", key=f"open_new_report_{device}", type="primary"
-            ):
-                st.session_state[open_key] = True
-            else:
-                st.caption(
-                    "Die Eingabemaske öffnet sich erst über den Knopf. Vorhandene Berichte bleiben oben sichtbar."
-                )
-                return
-        if st.button("Formular schließen", key=f"close_new_report_{device}"):
-            st.session_state[open_key] = False
-            st.rerun()
+    new_area, edit_area = st.columns(2)
+    with new_area:
+        if st.button(
+            "Neuen Servicebericht erfassen", key=f"open_new_report_{device}", type="primary"
+        ):
+            st.session_state[panel_key] = "new"
+    with edit_area:
+        if st.button("Bericht bearbeiten", key=f"open_edit_report_{device}", disabled=frame.empty):
+            st.session_state[panel_key] = "edit"
+    mode = st.session_state.get(panel_key)
+    if mode not in {"new", "edit"}:
+        return
+    editing = mode == "edit"
+    if st.button("Formular schließen", key=f"close_new_report_{device}"):
+        st.session_state.pop(panel_key, None)
+        st.rerun()
     existing = None
     rid = None
     if editing:
@@ -98,14 +98,19 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
             )
             st.rerun()
         if existing.origin == "research":
-            st.info(
-                "Die veröffentlichte Originalzeile bleibt erhalten. Änderungen betreffen die aktuelle Arbeitsfassung und werden protokolliert."
+            st.warning(
+                "Historischer Forschungsbericht: Das Original ist schreibgeschützt. Änderungen werden ausschließlich als Arbeitsfassung gespeichert und protokolliert."
             )
-        with st.expander("Änderungshistorie und erhaltene Originalwerte"):
+        with st.expander("Originalwerte und Änderungshistorie (schreibgeschützt)"):
             for entry in repo.history(rid):
                 st.markdown(f"**Version {entry['Version']} · {entry['Grund']}**")
                 st.caption(f"{entry['Zeitpunkt']:%d.%m.%Y %H:%M %Z} · {entry['Bearbeiter']}")
                 st.json({"Vorher": entry["Vorher"], "Nachher": entry["Nachher"]}, expanded=False)
+        if existing.origin == "research" and not st.checkbox(
+            "Arbeitsfassung dieses Forschungsberichts bearbeiten",
+            key=f"enable_research_edit_{device}_{rid}",
+        ):
+            return
     else:
         expected = None
     suffix = f"{device}_{rid}_{st.session_state.get(f'form_generation_{rid}', 0)}"
@@ -180,9 +185,14 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
             value="" if editing else "Neuer Servicebericht",
             key=f"report_reason_{suffix}",
         )
-        submitted = st.form_submit_button(
-            "Änderungen speichern" if editing else "Servicebericht speichern", type="primary"
-        )
+        save_label = "Servicebericht speichern"
+        if editing:
+            save_label = (
+                "Arbeitsfassung speichern"
+                if existing.origin == "research"
+                else "Änderungen speichern"
+            )
+        submitted = st.form_submit_button(save_label, type="primary")
     if submitted:
         try:
             request = st.session_state.setdefault("report_request", str(uuid.uuid4()))
@@ -210,6 +220,7 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
             st.session_state[f"form_generation_{rid}"] = (
                 st.session_state.get(f"form_generation_{rid}", 0) + 1
             )
+            st.session_state.pop(panel_key, None)
             if not editing:
                 st.session_state[open_key] = False
             st.session_state["saved_report"] = saved
@@ -248,6 +259,12 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
             .apply(lambda c: c.str.contains(search.strip(), case=False, regex=False))
             .any(axis=1)
         ]
+    listing[["Bezeichnung", "Modell", "Standort"]] = (
+        listing[["Bezeichnung", "Modell", "Standort"]]
+        .replace(r"^\s*$", "Nicht dokumentiert", regex=True)
+        .fillna("Nicht dokumentiert")
+    )
+    st.caption("Durchsuchbare Geräteliste. Zum Öffnen unten eine Geräte-ID auswählen.")
     st.dataframe(listing, hide_index=True, width="stretch", height=250)
     with st.expander("Neues Gerät anlegen"):
         with st.form("new_device"):
@@ -267,14 +284,14 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
         return
     options = listing["Geräte-ID"].tolist()
     device = st.selectbox(
-        "Gerät öffnen",
+        "Gerät aus der Liste öffnen",
         options,
         index=options.index("806279") if "806279" in options else 0,
         key="managed_device",
     )
-    details = devices.loc[devices["Geräte-ID"].eq(device)].iloc[0]
+    details = listing.loc[listing["Geräte-ID"].eq(device)].iloc[0]
     st.caption(
-        f"Gerät {device} · {details.Bezeichnung or 'Bezeichnung nicht angegeben'} · {details.Modell or 'Modell nicht angegeben'} · {details.Standort or 'Standort nicht angegeben'}"
+        f"Geöffnetes Gerät: {device} · Bezeichnung: {details.Bezeichnung} · Modell: {details.Modell} · Standort: {details.Standort}"
     )
     own = df[df.device_id.eq(device)]
     st.markdown("#### Bisherige Serviceberichte")
