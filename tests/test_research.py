@@ -52,8 +52,9 @@ def test_default_filters_have_no_chips_or_end_date_warning():
     )
     assert app.checkbox(key="all_devices").value and app.checkbox(key="all_categories").value
     assert not app.checkbox(key="limit_service_dates").value
-    assert app.date_input(key="service_start").value == date(2014, 7, 29)
-    assert app.date_input(key="service_end").value == date(2023, 4, 12)
+    assert not app.sidebar.date_input
+    assert not app.sidebar.info
+    assert not any("verfügbare Messdateien" in caption.value for caption in app.sidebar.caption)
     assert [m.value for m in app.metric[:4]] == ["46", "24", "11", "5"]
     assert not any("Enddatum auswählen" in element.value for element in app.info)
     # Ein alter gespeicherter Range-Wert darf die neuen skalaren Filter nicht beeinflussen.
@@ -61,6 +62,19 @@ def test_default_filters_have_no_chips_or_end_date_warning():
     app.run()
     assert app.metric[0].value == "46"
     assert not any("Enddatum auswählen" in element.value for element in app.info)
+    app.checkbox(key="limit_service_dates").check().run()
+    assert app.date_input(key="service_start").value == date(2014, 7, 29)
+    assert app.date_input(key="service_end").value == date(2023, 4, 12)
+    app.date_input(key="service_start").set_value(date(2022, 6, 28))
+    app.date_input(key="service_end").set_value(date(2022, 6, 28)).run()
+    selected_count = app.metric[0].value
+    app.checkbox(key="limit_service_dates").uncheck().run()
+    assert not app.sidebar.date_input and app.metric[0].value == "46"
+    app.checkbox(key="limit_service_dates").check().run()
+    assert not app.exception
+    assert app.date_input(key="service_start").value == date(2022, 6, 28)
+    assert app.date_input(key="service_end").value == date(2022, 6, 28)
+    assert app.metric[0].value == selected_count
 
 
 def test_incomplete_reversed_and_reset_dates_in_ui():
@@ -75,6 +89,10 @@ def test_incomplete_reversed_and_reset_dates_in_ui():
     assert any("nach dem Enddatum" in warning.value for warning in app.warning)
     next(b for b in app.button if b.label == "Alle Filter zurücksetzen").click().run()
     assert app.metric[0].value == "46" and not app.checkbox(key="limit_service_dates").value
+    assert not app.sidebar.date_input
+    app.checkbox(key="limit_service_dates").check().run()
+    assert app.date_input(key="service_start").value == date(2014, 7, 29)
+    assert app.date_input(key="service_end").value == date(2023, 4, 12)
 
 
 @pytest.mark.local_data

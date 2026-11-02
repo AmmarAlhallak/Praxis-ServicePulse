@@ -25,11 +25,8 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
         st.session_state["service_filter_version"] = 2
     with st.sidebar:
         st.markdown("### ❄ ServicePulse")
-        st.caption("Lokale Geräte- und Serviceverwaltung")
-        st.subheader("Serviceauswahl")
-        st.caption(
-            "Diese Filter gelten für Übersicht und Serviceexport. Geräteverwaltung und Betriebsanalyse haben eine eigene Geräte- und Fallauswahl."
-        )
+        st.subheader("Filter")
+        st.caption("Serviceberichte gezielt untersuchen")
         if st.button("Alle Filter zurücksetzen", width="stretch"):
             for key in [
                 "devices",
@@ -57,7 +54,7 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
                 help="Für einzelne Geräte das Häkchen bei „Alle Geräte“ entfernen. Die Auswahl ist durchsuchbar. Eine dann leere Auswahl zeigt keine Einträge.",
             )
             devices = None if all_devices else device_selection
-        with st.expander("Fehlerkategorien auswählen"):
+        with st.expander("Fehlerkategorien"):
             category_options = sorted(df.category.unique(), key=category_label)
             all_categories = st.checkbox(
                 "Alle Kategorien berücksichtigen", value=True, key="all_categories"
@@ -77,30 +74,29 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
         limit_dates = st.checkbox(
             "Servicezeitraum eingrenzen", value=False, key="limit_service_dates"
         )
-        start_date = st.date_input(
-            "Servicedatum ab",
-            dates.min().date() if len(dates) else None,
-            format="DD.MM.YYYY",
-            key="service_start",
-            disabled=not limit_dates,
+        start_date = st.session_state.get(
+            "service_start", dates.min().date() if len(dates) else None
         )
-        end_date = st.date_input(
-            "Servicedatum bis",
-            dates.max().date() if len(dates) else None,
-            format="DD.MM.YYYY",
-            key="service_end",
-            disabled=not limit_dates,
-        )
-        include_undated = st.checkbox(
-            "Einträge ohne gültiges Datum einbeziehen", value=True, key="include_undated"
-        )
-        st.divider()
-        st.caption(
-            f"{len(df)} Serviceeinträge · {df.loc[df.device_valid, 'device_id'].nunique()} betroffene Geräte\n\n{len(files)} verfügbare Messdateien"
-        )
-        with st.expander("Begriffe kurz erklärt"):
-            st.markdown(
-                "**Serviceeintrag:** eine dokumentierte Meldung oder Maßnahme aus der Serviceübersicht, kein automatisch bestätigter Ausfall.\n\n**Fehlerkategorie:** die von den Forschern zugeordnete Gruppe eines Eintrags.\n\n**Ohne Behebung:** Originalzusatz „No fix“; der Bericht dokumentiert keine Behebung. Weitere Einträge können denselben Zustand betreffen.\n\n**Messdaten fehlen:** Originalkategorie „Data missing“; keine leere Excel-Zelle.\n\n**Messabdeckung:** zeigt, ob und wie viele Messpunkte in einem Zeitfenster vorliegen. Einzelne Punkte belegen keine lückenlose Aufzeichnung."
+        end_date = st.session_state.get("service_end", dates.max().date() if len(dates) else None)
+        if limit_dates:
+            # Auch ausgeblendete Datumsfelder behalten ihre Sitzungsauswahl.
+            start_date = st.date_input(
+                "Servicedatum ab",
+                dates.min().date() if len(dates) else None,
+                format="DD.MM.YYYY",
+                key="service_start",
+                persist_state="session",
+            )
+            end_date = st.date_input(
+                "Servicedatum bis",
+                dates.max().date() if len(dates) else None,
+                format="DD.MM.YYYY",
+                key="service_end",
+                persist_state="session",
+            )
+        with st.expander("Erweiterte Zeitraumfilter"):
+            include_undated = st.checkbox(
+                "Einträge ohne gültiges Datum einbeziehen", value=True, key="include_undated"
             )
     filtered, filter_problem = apply_service_selection(
         df, devices, categories, limit_dates, start_date, end_date, include_undated
@@ -125,8 +121,6 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
         else "ungültig / unvollständig"
     )
     active_summary = f"Aktive Servicefilter · Geräte: {device_summary} · Kategorien: {category_summary} · Zeitraum: {period_summary} · Einträge ohne Datum: {('einbezogen' if include_undated else 'ausgeschlossen')}"
-    with st.sidebar:
-        st.info(active_summary)
     m = metrics(filtered)
     metric_items = [
         (
