@@ -8,7 +8,13 @@ import streamlit as st
 
 from servicepulse.presentation import counts_figure, display_frame
 
-CHART_CONFIG = {"displayModeBar": False, "responsive": True, "displaylogo": False}
+CHART_CONFIG = {
+    "displayModeBar": True,
+    "responsive": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtons": [["zoomIn2d", "zoomOut2d", "resetScale2d"], ["zoom2d", "pan2d"]],
+}
 
 
 def table(frame: pd.DataFrame, key: str | None = None, height: str | int = "auto") -> None:
@@ -18,6 +24,7 @@ def table(frame: pd.DataFrame, key: str | None = None, height: str | int = "auto
 
 def chart(figure: go.Figure, key: str) -> None:
     """Zeigt die bestehende Plotly-Figur unter einer eindeutigen Widgetkennung."""
+    figure.update_layout(dragmode="zoom")
     st.plotly_chart(figure, width="stretch", key=key, config=CHART_CONFIG)
 
 

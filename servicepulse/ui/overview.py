@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from servicepulse.presentation import category_label, faults_export, style_figure
+from servicepulse.presentation import faults_export, style_figure
 from servicepulse.ui.common import chart, show_counts, table
 
 
@@ -12,7 +12,7 @@ def render_overview(
     df: pd.DataFrame, filtered: pd.DataFrame, registered_devices: pd.DataFrame
 ) -> None:
     """Zeigt die bisherigen deskriptiven Serviceauswertungen unverändert."""
-    st.caption(
+    st.write(
         f"{df.loc[df.device_valid, 'device_id'].nunique()} von {len(registered_devices)} registrierten Geräten haben insgesamt {len(df)} dokumentierte Serviceeinträge. Geräte ohne Eintrag sind nicht automatisch störungsfrei."
     )
     left, right = st.columns([3, 2], gap="large")
@@ -26,23 +26,13 @@ def render_overview(
         )
         column = "category_group" if grouped else "category"
         show_counts(filtered, column, "Fehlerkategorie", "fault_categories")
-        if not filtered.empty:
-            top = filtered[column].value_counts()
-            st.caption(
-                f"{category_label(top.index[0])}: {int(top.iloc[0])} Einträge in dieser Auswahl."
-            )
-        st.caption(
+        st.write(
             "Die Häufigkeiten beschreiben Serviceeinträge und belegen keine unabhängigen Ausfälle oder Ausfallwahrscheinlichkeiten."
         )
     with right:
         st.subheader("Einträge nach Geräten")
         show_counts(filtered, "device_id", "Geräte-ID", "device_counts")
-        if not filtered.empty:
-            counts = filtered.device_id.value_counts()
-            st.write(
-                f"Beispiel aus der Auswahl: Gerät {counts.index[0]} hat {int(counts.iloc[0])} dokumentierte Einträge."
-            )
-        st.caption(
+        st.write(
             "Die Beobachtungszeiten unterscheiden sich. Einträge pro Gerät sind keine Ausfallraten."
         )
 
@@ -56,7 +46,7 @@ def render_overview(
             "In dieser Auswahl gibt es keine mehrfach dokumentierte Kombination aus Gerät und Originalkategorie."
         )
     table(repeated, key="repeated_rows")
-    st.caption(
+    st.write(
         "Die Tabelle zählt Kombinationen, keine unabhängigen Ausfälle. Eine ungelöste Störung kann mehrere Serviceeinträge verursachen."
     )
 

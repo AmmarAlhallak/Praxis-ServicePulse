@@ -16,9 +16,7 @@ from servicepulse.ui.quality import render_quality
 from servicepulse.ui.shell import configure_page, render_service_filters
 
 configure_page()
-st.caption("SERVICEPULSE  /  ANALYSE VON ULTRATIEFKÜHLGERÄTEN")
 st.title("Kälteanlagen im Blick.")
-st.write("Geräte verwalten, Service dokumentieren und Betriebsdaten nachvollziehbar untersuchen.")
 try:
     reports = repo.reports_frame()
     originals = repo.reports_frame(originals=True)
@@ -41,14 +39,18 @@ conflicts = (
     else None
 )
 selected = render_service_filters(reports, files)
-overview, management, operation, quality = st.tabs(
-    [
-        "Übersicht",
-        "Geräte & Serviceberichte",
-        "Betriebsanalyse & Vergleiche",
-        "Datenqualität & Forschung",
-    ]
-)
+with st.sidebar.expander("Ansicht"):
+    presentation_mode = st.checkbox(
+        "Präsentationsmodus",
+        value=True,
+        key="presentation_mode",
+        help="Drei Hauptseiten anzeigen. Ausschalten, um Datenqualität, Quellen und Datenverwaltung zu öffnen.",
+    )
+labels = ["Übersicht", "Geräte & Serviceberichte", "Betriebsanalyse & Vergleiche"]
+if not presentation_mode:
+    labels.append("Datenqualität & Forschung")
+pages = st.tabs(labels)
+overview, management, operation = pages[:3]
 with overview:
     render_overview(reports, selected, devices)
 with management:
@@ -58,5 +60,6 @@ with management:
         database_problem(exc)
 with operation:
     render_operation(reports, selected, files, devices, ROOT)
-with quality:
-    render_quality(ROOT, reports, originals, files, file_errors, conflicts)
+if not presentation_mode:
+    with pages[3]:
+        render_quality(ROOT, reports, originals, files, file_errors, conflicts)

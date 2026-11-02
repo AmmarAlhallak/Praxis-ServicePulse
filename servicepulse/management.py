@@ -125,9 +125,6 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
     )
     current = form_value("category", "Unbekannt")
     with st.form(f"report_form_{suffix}"):
-        st.caption(
-            "Nur Gerät und Herkunft sind erforderlich. Leere Angaben bleiben ausdrücklich „nicht angegeben“; es werden keine Messdaten erzeugt."
-        )
         day = st.date_input(
             "Servicedatum",
             value=None
@@ -268,7 +265,6 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
         .replace(r"^\s*$", "Nicht dokumentiert", regex=True)
         .fillna("Nicht dokumentiert")
     )
-    st.caption("Durchsuchbare Geräteliste. Zum Öffnen unten eine Geräte-ID auswählen.")
     st.dataframe(listing, hide_index=True, width="stretch", height=250)
     with st.expander("Neues Gerät anlegen"):
         with st.form("new_device"):
@@ -294,12 +290,8 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
         index=options.index("806279") if "806279" in options else 0,
         key="managed_device",
     )
-    details = listing.loc[listing["Geräte-ID"].eq(device)].iloc[0]
-    st.caption(
-        f"Geöffnetes Gerät: {device} · Bezeichnung: {details.Bezeichnung} · Modell: {details.Modell} · Standort: {details.Standort}"
-    )
     own = df[df.device_id.eq(device)]
-    st.markdown("#### Bisherige Serviceberichte")
+    st.markdown(f"#### Servicehistorie · Gerät {device}")
     if own.empty:
         st.info("Für dieses Gerät ist noch kein Servicebericht dokumentiert.")
     else:
@@ -319,9 +311,7 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
             "Für dieses Gerät sind keine Messdaten registriert. Ein Servicebericht erzeugt keine Sensordaten."
         )
     else:
-        st.write(
-            f"{len(data)} Mess- oder Meldungsdateien verfügbar. Die Betriebsanalyse bietet eine eigene Geräte- und Zeitraumwahl."
-        )
+        st.write(f"{len(data)} Mess- oder Meldungsdateien verfügbar.")
         if st.button("Dieses Gerät für die Betriebsanalyse auswählen"):
             st.session_state["measurement_device"] = device
             st.success("Gerät ausgewählt. Öffne „Betriebsanalyse & Vergleiche“.")

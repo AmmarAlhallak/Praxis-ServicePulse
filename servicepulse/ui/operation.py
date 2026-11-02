@@ -7,9 +7,7 @@ import streamlit as st
 
 from servicepulse.case_review import review_temperature
 from servicepulse.measurements import (
-    event_window,
     numeric_columns,
-    offsets,
     series_window,
     serviceday_summary,
     time_bounds,
@@ -28,7 +26,7 @@ from servicepulse.research import (
     case_observation,
     coverage_rows,
 )
-from servicepulse.ui.common import chart, table, technical_error
+from servicepulse.ui.common import chart, technical_error
 
 
 def render_operation(
@@ -57,9 +55,6 @@ def render_operation(
         st.session_state["device_search"] = ""
 
     st.subheader("Den Servicetag im Betrieb betrachten")
-    st.write(
-        "Die Fallanalyse hat eine eigene Geräte-, Service- und Zeitraumwahl. Die Servicefilter links verändern diesen Untersuchungsfall standardmäßig nicht."
-    )
     temperatures = files[files.kind.eq("temp")]
     for area, (code, (example_device, example_date, example_label)) in zip(
         st.columns(3), DEMO_CASES.items()
@@ -97,7 +92,8 @@ def render_operation(
                 "Für dieses Gerät sind keine Temperaturmessdaten vorhanden. Ein neuer Servicebericht erzeugt keine Sensordaten."
             )
         else:
-            with st.expander("Expertenansicht · Messdatei und Originalfelder"):
+            file_details = st.expander("Messdatei und Herkunft")
+            with file_details:
                 selected_path = st.selectbox(
                     "Messdatei auswählen",
                     matches.path.tolist(),
@@ -119,11 +115,6 @@ def render_operation(
             candidates = case_source[
                 case_source.device_id.eq(device) & case_source.event_date.notna()
             ]
-            st.caption(
-                "Fallliste: aktive Serviceauswahl."
-                if linked
-                else "Fallliste: alle dokumentierten Serviceeinträge dieses Geräts. Der nachfolgende Messzeitraum ist unabhängig vom Servicezeitraum links."
-            )
             mode = st.radio(
                 "Untersuchungsart",
                 ["Rund um einen Servicetag", "Freier Zeitraum"],
@@ -144,26 +135,33 @@ def render_operation(
                     key=f"service_day_{device}",
                 )
                 chosen_date = df.loc[row_id, "event_date"]
-                st.caption(
+                st.write(
                     f"Dokumentierter Anlass: {(fault_label(df.loc[row_id, 'fault_text']) if df.loc[row_id, 'origin'] == 'research' else df.loc[row_id, 'fault_text'])} · Geräte-ID {device}"
                 )
-                st.caption(
-                    f"Quelle: {df.loc[row_id, 'source_file']} · Bericht {int(df.loc[row_id, 'report_id'])}. "
-                    + (
-                        f"Original-Excel-Zeile {int(df.loc[row_id, 'source_row'])}."
-                        if df.loc[row_id, "origin"] == "research"
-                        else "Selbst erfasster Servicebericht."
+                with file_details:
+                    st.caption(
+                        f"Quelle: {df.loc[row_id, 'source_file']} · Bericht {int(df.loc[row_id, 'report_id'])}. "
+                        + (
+                            f"Original-Excel-Zeile {int(df.loc[row_id, 'source_row'])}."
+                            if df.loc[row_id, "origin"] == "research"
+                            else "Selbst erfasster Servicebericht."
+                        )
                     )
-                )
                 measure = st.selectbox(
                     "3 · Messgröße wählen",
                     numeric,
                     index=numeric.index("RTD") if "RTD" in numeric else 0,
                     format_func=measure_label,
                     key=f"measure_{device}",
+                    help="RTD misst die Temperatur lokal am Kammersensor, nicht zwingend an jedem Ort der Kammer.",
                 )
                 days = st.slider(
-                    "Tage vor und nach dem Servicetag", 1, 30, 7, key="comparison_days"
+                    f"Vergleichszeitraum: jeweils {st.session_state.get('comparison_days', 7)} Tage vor und nach dem Servicetag",
+                    1,
+                    30,
+                    7,
+                    key="comparison_days",
+                    help="Der gesamte Servicetag wird ausgeschlossen. Jeder gültige Messpunkt wird gleich gewichtet; Messlücken werden nicht aufgefüllt.",
                 )
                 start, end = (
                     chosen_date - pd.Timedelta(days=days),
@@ -187,6 +185,7 @@ def render_operation(
                     index=numeric.index("RTD") if "RTD" in numeric else 0,
                     format_func=measure_label,
                     key=f"measure_{device}",
+                    help="RTD misst die Temperatur lokal am Kammersensor, nicht zwingend an jedem Ort der Kammer.",
                 )
                 first, last = time_bounds(path)
                 last_day = (
@@ -219,9 +218,6 @@ def render_operation(
                 st.warning(
                     "Gerätezuordnung ungeklärt: Eine Rohdatei im Geräteordner 806018 nennt die Kennung 806022. Die Zuordnung der Autoren bleibt erhalten, ist aber fachlich noch zu klären."
                 )
-            st.caption(
-                "RTD ist der Widerstandstemperatursensor in der Kühlkammer. Er misst lokal und beschreibt nicht zwingend die Temperatur an jedem Ort der Kammer."
-            )
             bucket = st.selectbox(
                 "Werte zusammenfassen pro",
                 ["hour", "day", "minute"],
@@ -255,9 +251,6 @@ def render_operation(
                             if trace.name in {"Minimum", "Maximum"}:
                                 trace.visible = "legendonly"
                         chart(figure, "measurement_curve")
-                        st.caption(
-                            "Gezeigt wird der Mittelwert. Minimum und Maximum lassen sich durch Anklicken in der Legende einblenden. Leere Intervalle bleiben sichtbare Lücken; es werden keine Zwischenwerte erfunden."
-                        )
                         st.download_button(
                             "Messverlauf als CSV herunterladen",
                             curve.to_csv(index=False).encode("utf-8-sig"),
@@ -267,7 +260,7 @@ def render_operation(
                             help="Exportiert die unveränderten berechneten Aggregate und Messpunktzahlen mit technischen Originalbezeichnungen.",
                         )
                     if device == "806279" and measure == "RTD":
-                        gaps, daily, warm, states = review_temperature(path, start, end)
+                        gaps, _daily, warm, _states = review_temperature(path, start, end)
                         if not gaps.empty:
                             largest = gaps.iloc[0]
                             st.warning(
@@ -277,25 +270,13 @@ def render_operation(
                             st.write(
                                 f"Tatsächlich gemessen: {int(warm.rows)} Werte über +15 °C, von {warm.first_time:%d.%m.%Y %H:%M} bis {warm.last_time:%d.%m.%Y %H:%M}; höchster Wert {german_number(warm.maximum, 2)} °C. Das anschließende Abkühlen ist beobachtbar; eine Ursache ist damit nicht bewiesen."
                             )
-                        with st.expander(
-                            "Expertenansicht · Nachprüfung 806279, Lücken und Betriebskennzeichen"
-                        ):
-                            st.dataframe(daily, hide_index=True, width="stretch")
-                            st.dataframe(gaps, hide_index=True, width="stretch")
-                            st.dataframe(states, hide_index=True, width="stretch")
-                            st.caption(
-                                "Die zwei niederwertigsten State-Bits werden entsprechend der Autorenbeschreibung als Verdichtersignale angezeigt. Das ist keine unabhängige Prüfung der Hardware und keine vollständige Dekodierung aller Zustandsbits. Aus Alarmen, Bits oder Lücken wird keine Reparaturwirkung abgeleitet."
-                            )
                     st.info(
                         "Die farbige Fläche markiert den dokumentierten Servicetag – keinen nachgewiesenen Fehlerbeginn. Ein Unterschied vor und nach diesem Tag beweist keine Reparaturwirkung."
                     )
                     if chosen_date is not None:
                         comparison = window_comparison(path, measure, chosen_date, days)
                         day = serviceday_summary(path, measure, chosen_date)
-                        st.subheader("5 · Vor und nach dem Servicetag")
-                        st.caption(
-                            f"Jeweils {days} Tage; der Servicetag selbst ist aus beiden Vergleichsfenstern ausgeschlossen. Der Durchschnitt gewichtet jeden vorhandenen Messwert gleich."
-                        )
+                        st.subheader("5 · Vorher und nachher · ohne Servicetag")
                         for area, (_, row) in zip(st.columns(2), comparison.iterrows()):
                             with area:
                                 label = (
@@ -308,24 +289,12 @@ def render_operation(
                                     f"{german_number(row['mean'], 2)} {unit(measure)}"
                                     if pd.notna(row["mean"])
                                     else "Keine Messwerte",
-                                    help="Durchschnitt der vorhandenen Messwerte im jeweiligen Fenster.",
+                                    help=f"{german_number(row['valid'])} gültige Messpunkte; Median {german_number(row['median'], 2)} {unit(measure)}; Minimum {german_number(row['minimum'], 2)}, Maximum {german_number(row['maximum'], 2)} {unit(measure)}.",
                                 )
-                                st.caption(
-                                    f"Gültige Messpunkte: {german_number(row['valid'])} · Median: {german_number(row['median'], 2)} {unit(measure)}"
-                                )
-                                st.caption(
-                                    f"Minimum: {german_number(row['minimum'], 2)} {unit(measure)} · Maximum: {german_number(row['maximum'], 2)} {unit(measure)}"
-                                )
-                        st.caption(
-                            f"Am Servicetag selbst: {german_number(day.valid)} gültige Messpunkte. Diese gehen nicht in die beiden Vergleichsmittelwerte ein."
-                        )
                         if (comparison.valid == 0).any():
                             st.warning(
                                 "Mindestens ein Vergleichsfenster enthält keine gültigen Messwerte. Ein Vorher-Nachher-Vergleich ist für dieses Fenster nicht möglich."
                             )
-                        st.caption(
-                            "Unterschiedliche Messpunktzahlen und Lücken können die Vergleichbarkeit begrenzen. Auch viele Messpunkte belegen keine kontinuierliche Aufzeichnung."
-                        )
                         st.subheader("6 · Beobachtung und Datenlücken verstehen")
                         st.write(case_observation(comparison, day, unit(measure)))
                         st.dataframe(
@@ -337,76 +306,6 @@ def render_operation(
                         st.caption(
                             "Eine Stunde gilt hier als beobachtet, sobald mindestens ein gültiger Messwert vorliegt. Das ist keine vollständige Stundenabdeckung. Doppelte Zeitstempel erhöhen nicht die Anzahl beobachteter Stunden."
                         )
-                        st.info(
-                            "Noch zu prüfen: Betriebszustände, Türöffnungen, Abtauen, zeitlicher Beginn des Defekts und Inhalt der Serviceberichte. Ohne diese Prüfungen lässt sich eine Veränderung nicht einer Reparatur zuschreiben."
-                        )
-                        with st.expander("Expertenansicht · Vergleichsfenster und Messpunktzahlen"):
-                            table(comparison)
-                            st.caption(
-                                "Median: mittlerer Wert der sortierten Messwerte. Die Grenzen zeigen den ersten und letzten vorhandenen Messpunkt, keine garantierte lückenlose Abdeckung."
-                            )
-                    event_files = files[files.device_id.eq(device) & files.kind.eq("events")]
-                    offpath = root / "research/reference/data/raw_data/other_data/time_offsets.csv"
-                    with st.expander("Expertenansicht · Geräteereignisse und Uhrkorrektur"):
-                        if device == "806279" and measure == "RTD":
-                            event_paths = files[
-                                files.device_id.eq(device) & files.kind.eq("events")
-                            ]
-                            clock_source = (
-                                root
-                                / "research/reference/data/raw_data/other_data/time_offsets.csv"
-                            )
-                            if len(event_paths) == 1 and clock_source.exists():
-                                clock_offset = offsets(clock_source).get(device)
-                                if clock_offset is not None:
-                                    power = event_window(
-                                        event_paths.iloc[0].path, start, end, clock_offset
-                                    )
-                                    power = power[
-                                        power.Event.isin(["Shutdown", "Display Power On"])
-                                    ]
-                                    if not power.empty:
-                                        labels = {
-                                            "Shutdown": "Abschaltung gemeldet",
-                                            "Display Power On": "Einschalten der Anzeige gemeldet",
-                                        }
-                                        st.info(
-                                            "Geräteprotokoll: "
-                                            + "; ".join(
-                                                (
-                                                    f"{row.Datetime:%d.%m.%Y %H:%M:%S}: {labels[row.Event]}"
-                                                    for row in power.itertuples()
-                                                )
-                                            )
-                                            + ". Zugeordnet mit der konstanten Autoren-Uhrkorrektur. Das belegt keine Ursache der Lücke und keine Reparaturwirkung."
-                                        )
-                        st.caption(
-                            "Gerätemeldungen wie Türöffnungen sind keine zusätzlichen Serviceeinträge. Bis zu 1.000 Originalmeldungen; diese werden zur Nachprüfbarkeit nicht automatisch übersetzt."
-                        )
-                        if len(event_files) > 1:
-                            st.warning(
-                                "Mehrere Meldungsdateien für dieselbe Geräte-ID. Die Zuordnung muss zuerst geklärt werden."
-                            )
-                        elif not event_files.empty and offpath.exists():
-                            clock = offsets(offpath)
-                            if device in clock:
-                                st.caption(
-                                    f"Konstante Uhrkorrektur der Autoren: {clock[device]}. Historische Uhrdrift ist damit nicht geprüft."
-                                )
-                                table(
-                                    event_window(
-                                        event_files.iloc[0].path, start, end, clock[device]
-                                    ),
-                                    height=250,
-                                )
-                            else:
-                                st.warning(
-                                    "Keine Uhrkorrektur für dieses Gerät vorhanden; Meldungen werden nicht zeitlich zugeordnet."
-                                )
-                        else:
-                            st.info(
-                                "Keine eindeutig zuordenbaren Meldungsdaten mit Uhrenreferenz vorhanden."
-                            )
                 except Exception as exc:
                     st.error(
                         "Die Messdaten konnten für diese Auswahl nicht ausgewertet werden. Bitte eine andere Messgröße oder einen anderen Zeitraum wählen und die Datenqualität prüfen."

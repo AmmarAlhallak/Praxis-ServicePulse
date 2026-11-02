@@ -125,7 +125,6 @@ def test_german_sections_and_preserved_metrics():
         "Übersicht",
         "Geräte & Serviceberichte",
         "Betriebsanalyse & Vergleiche",
-        "Datenqualität & Forschung",
     ]
     assert [metric.value for metric in app.metric[:4]] == ["46", "24", "11", "5"]
 
@@ -164,12 +163,53 @@ def test_german_sections_and_preserved_metrics():
     assert "Kältemittelleckage" in app.multiselect(key="categories").format_func(
         "Refrigerant leakage"
     )
+    assert not any("Aktuelle Serviceauswahl" in item.value for item in app.caption)
+    assert not any("Aktive Servicefilter" in item.value for item in app.info)
+    assert not any("Weitere Messdateien importieren" in expander.label for expander in app.expander)
+    for element in app.get("plotly_chart"):
+        config = json.loads(element.proto.config)
+        assert config["displayModeBar"] is True
+        assert config["scrollZoom"] is True
+        assert config["modeBarButtons"][0] == ["zoomIn2d", "zoomOut2d", "resetScale2d"]
+    assert not any(
+        any(
+            word in item.label
+            for word in [
+                "Nachprüfung 806279",
+                "Geräteereignisse und Uhrkorrektur",
+                "Vergleichsfenster und Messpunktzahlen",
+            ]
+        )
+        for item in app.expander
+    )
+    app.checkbox(key="presentation_mode").set_value(False).run()
+    assert not app.exception and not app.error
+    assert len(app.tabs) == 4
+    assert app.tabs[3].label == "Datenqualität & Forschung"
     assert any("Weitere Messdateien importieren" in expander.label for expander in app.expander)
     assert not app.tabs[2].get("file_uploader")
     assert len(app.tabs[3].get("file_uploader")) == 1
+    app.checkbox(key="presentation_mode").set_value(True).run()
+    assert not app.exception and not app.error
+    assert len(app.tabs) == 3
     if not any(widget.key == "measurement_device" for widget in app.selectbox):
         return
     assert all(
         "/" not in label and "\\" not in label
         for label in app.selectbox(key="measurement_device").options
     )
+
+
+def test_filter_status_only_when_restricted():
+    app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+    assert not app.exception
+    assert not any("Aktive Servicefilter" in item.value for item in app.info)
+    app.checkbox(key="all_devices").set_value(False).run()
+    app.multiselect(key="devices").set_value(["806279"]).run()
+    assert not app.exception and not app.error
+    assert any("Aktive Servicefilter" in item.value and "806279" in item.value for item in app.info)
+    assert app.metric[0].value == "3"
+    next(item for item in app.button if item.label == "Alle Filter zurücksetzen").click().run()
+    assert not app.exception
+    assert app.metric[0].value == "46"
+    assert not any("Aktive Servicefilter" in item.value for item in app.info)

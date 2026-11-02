@@ -26,7 +26,6 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
     with st.sidebar:
         st.markdown("### ❄ ServicePulse")
         st.subheader("Filter")
-        st.caption("Serviceberichte gezielt untersuchen")
         if st.button("Alle Filter zurücksetzen", width="stretch"):
             for key in [
                 "devices",
@@ -120,7 +119,6 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
         if start_date and end_date and (not filter_problem)
         else "ungültig / unvollständig"
     )
-    active_summary = f"Aktive Servicefilter · Geräte: {device_summary} · Kategorien: {category_summary} · Zeitraum: {period_summary} · Einträge ohne Datum: {('einbezogen' if include_undated else 'ausgeschlossen')}"
     m = metrics(filtered)
     metric_items = [
         (
@@ -146,10 +144,19 @@ def render_service_filters(df: pd.DataFrame, files: pd.DataFrame) -> pd.DataFram
     ]
     for column, (label, value, help_text) in zip(st.columns(4), metric_items):
         column.metric(label, value, help=help_text)
-    st.caption(
-        f"Aktuelle Serviceauswahl: {len(filtered)} von {len(df)} Einträgen. Mehrere Einträge können denselben ungelösten Zustand beschreiben."
-    )
-    st.caption(active_summary)
+    active = []
+    if not all_devices:
+        active.append(f"Geräte: {device_summary}")
+    if not all_categories:
+        active.append(f"Kategorien: {category_summary}")
+    if limit_dates:
+        active.append(f"Zeitraum: {period_summary}")
+        if include_undated:
+            active.append("einschließlich Berichte ohne Datum")
+    if not include_undated:
+        active.append("Berichte ohne Datum ausgeschlossen")
+    if active:
+        st.info("Aktive Servicefilter · " + " · ".join(active))
     return filtered
 
 
