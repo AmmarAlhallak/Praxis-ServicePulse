@@ -36,6 +36,10 @@ PostgreSQL ist die maßgebliche Servicequelle: 46 historische Einträge mit unve
 
 ## Bewusste Wartung
 
+Eigene Berichte lassen sich unter **Geräte & Serviceberichte → Bericht bearbeiten → Bericht archivieren** archivieren. Dafür sind ein Grund und eine ausdrückliche Bestätigung erforderlich. Forschungsberichte sind geschützt. Archivierte Berichte verschwinden aus den normalen Auswertungen und Servicehistorien; unter **Archivierte Serviceberichte** lassen sie sich ansehen und mit Bestätigung wiederherstellen. Bericht, Quelle, Maßnahme und Änderungshistorie bleiben erhalten.
+
+Vor jeder Archivierung und Wiederherstellung wird die betroffene PostgreSQL-Datenbank gesichert und der Dump geprüft. Bei einem Sicherungsfehler wird nichts geändert. Sicherungen liegen unter `data/backups/postgresql/`; ihr Dateiname wird in der jeweiligen Auditversion vermerkt. Explizite Migrationen erstellen ebenfalls vorher eine Sicherung. Die Migration `0004` ergänzt nur den Archivstatus mit dem Anfangswert `false`; sie archiviert keine vorhandenen Berichte.
+
 ```powershell
 # Erstvorbereitung; auf diesem Laptop bereits erledigt
 .\.venv\Scripts\python.exe scripts/prepare_database.py

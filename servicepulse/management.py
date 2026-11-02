@@ -111,6 +111,8 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
             key=f"enable_research_edit_{device}_{rid}",
         ):
             return
+        if existing.origin == "manual":
+            archive_controls(existing, expected_version=expected)
     else:
         expected = None
     suffix = f"{device}_{rid}_{st.session_state.get(f'form_generation_{rid}', 0)}"
@@ -236,6 +238,8 @@ def report_form(device: str, frame: pd.DataFrame) -> None:
 def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None:
     """Zeigt Geräte, gespeicherte Berichte und kontrollierte Eingaben für die Verwaltung."""
     st.subheader("Geräte und Service einfach verwalten")
+    if "archive_notice" in st.session_state:
+        st.success(st.session_state.pop("archive_notice"))
     if "saved_report" in st.session_state:
         st.success(
             f"Bericht {st.session_state.pop('saved_report')} wurde dauerhaft gespeichert. Historie und Statistiken sind aktualisiert."
@@ -281,6 +285,7 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
                 st.error(str(exc))
     if listing.empty:
         st.info("Kein Gerät zur Suche gefunden. Suche ändern oder ein neues Gerät anlegen.")
+        render_archive()
         return
     options = listing["Geräte-ID"].tolist()
     device = st.selectbox(
@@ -331,3 +336,80 @@ def render(df: pd.DataFrame, files: pd.DataFrame, devices: pd.DataFrame) -> None
         )
     st.markdown("#### Bericht erfassen oder bearbeiten")
     report_form(device, own)
+    render_archive()
+
+
+def archive_controls(report: pd.Series, *, expected_version: int, restore: bool = False) -> None:
+    """Verlangt eine ausdrückliche, berichtsbezogene Bestätigung vor jeder Archivänderung."""
+    if report.origin != "manual":
+        return
+    rid = int(report.report_id)
+    operation = "wiederherstellen" if restore else "archivieren"
+    token = f"{operation}_{rid}_{expected_version}"
+    pending = f"pending_{token}"
+    if st.button(f"Bericht {operation}", key=f"open_{token}"):
+        st.session_state[pending] = True
+    if not st.session_state.get(pending):
+        return
+    st.warning(
+        f"Eigenen Bericht {rid} für Gerät {report.device_id} {operation}? "
+        + (
+            "Er erscheint danach wieder in den normalen Auswertungen."
+            if restore
+            else "Er wird aus normalen Auswertungen und Historien entfernt und bleibt im Archiv wiederherstellbar."
+        )
+    )
+    with st.form(f"confirm_{token}"):
+        reason = st.text_input("Grund", key=f"reason_{token}")
+        actor = st.text_input("Bearbeiter (optional)", key=f"actor_{token}")
+        confirmed = st.checkbox(
+            f"Ich bestätige: Bericht {rid} für Gerät {report.device_id} {operation}.",
+            key=f"confirmed_{token}",
+        )
+        submitted = st.form_submit_button(
+            "Wiederherstellung bestätigen" if restore else "Archivierung bestätigen"
+        )
+    if st.button("Abbrechen", key=f"cancel_{token}"):
+        st.session_state.pop(pending, None)
+        st.rerun()
+    if submitted:
+        try:
+            change = repo.restore_report if restore else repo.archive_report
+            change(rid, int(expected_version), confirmed=confirmed, reason=reason, actor=actor)
+            st.session_state.pop(pending, None)
+            st.session_state.pop(f"report_panel_{report.device_id}", None)
+            st.session_state.pop(f"edit_version_{rid}", None)
+            st.session_state["archive_notice"] = (
+                f"Bericht {rid} wurde "
+                + ("wiederhergestellt." if restore else "archiviert.")
+                + " Sicherung und Änderungsprotokoll sind vorhanden."
+            )
+            st.rerun()
+        except (ValueError, RuntimeError) as exc:
+            st.error(str(exc))
+        except Exception:
+            st.error(
+                "Archivstatus konnte nicht geändert werden. Bitte neu laden und die Datenbankverbindung prüfen."
+            )
+
+
+def render_archive() -> None:
+    """Zeigt archivierte eigene Berichte getrennt von normalen Servicehistorien."""
+    with st.expander("Archivierte Serviceberichte"):
+        archived = repo.reports_frame(archived=True)
+        if archived.empty:
+            st.caption("Keine archivierten Serviceberichte vorhanden.")
+            return
+        report_table(archived)
+        rid = st.selectbox(
+            "Archivierten Bericht öffnen",
+            archived.report_id.tolist(),
+            key="archived_report",
+            format_func=lambda value: (
+                f"Bericht {value} · Gerät {archived.loc[archived.report_id.eq(value), 'device_id'].iloc[0]}"
+            ),
+        )
+        report = archived.loc[archived.report_id.eq(rid)].iloc[0]
+        st.caption("Änderungsprotokoll einschließlich Archivierung und Wiederherstellung")
+        st.json(repo.history(int(rid)), expanded=False)
+        archive_controls(report, expected_version=int(report.report_version), restore=True)

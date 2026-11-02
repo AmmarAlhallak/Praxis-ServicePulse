@@ -35,7 +35,7 @@ flowchart TD
     I --> R
     U --> Q[measurements.py / DuckDB]
     Q --> F[Unveränderte Parquet-Dateien]
-    L[Alembic: drei Schema-Versionen] --> P
+    L[Alembic: Schema-Migrationen] --> P
 ```
 
 ## Dateien, die man erklären können sollte
@@ -44,7 +44,7 @@ flowchart TD
 |---|---|
 | `app.py` | Konfigurieren, PostgreSQL-Bestand laden und vier Bereiche zusammenführen. Keine eigene Sensorberechnung. |
 | `servicepulse/repository.py` | Import, Geräte, Berichte und Dateiregister. SQLAlchemy-Sessions und Transaktionen. Für Tests ist eine getrennte Verbindung übergebbar. |
-| `servicepulse/models.py` | Beschreibt Tabellen, Fremdschlüssel, zulässige Werte und Berichtsversionen. Die drei Migrationen erzeugen das tatsächliche Schema samt Schutz- und Audittriggern. |
+| `servicepulse/models.py` | Beschreibt Tabellen, Fremdschlüssel, zulässige Werte und Berichtsversionen. Die Alembic-Migrationen erzeugen das tatsächliche Schema samt Schutz- und Audittriggern. |
 | `servicepulse/measurements.py` | Validiert Parquet-Metadaten und fragt Zeitfenster mit DuckDB ab. |
 | `servicepulse/presentation.py` | Deutsche Lesehilfen, Export und Diagramme einschließlich sichtbarer Messlücken. |
 

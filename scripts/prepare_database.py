@@ -213,6 +213,7 @@ def prepare() -> None:
 
 def prepare_contents(settings: dict[str, Any], owner: Engine) -> None:
     """Bereitet Schema, Daten, Rollenrechte und lokale App-Konfiguration vor."""
+    backup(settings)
     migrate(owner)
     with owner.begin() as con:
         con.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
@@ -284,6 +285,7 @@ def main() -> int:
             owner = create_engine(connection_url(settings, True), hide_parameters=True)
             try:
                 if args.migrate:
+                    backup(settings)
                     migrate(owner)
                     print("Migrationen angewendet.")
                 else:

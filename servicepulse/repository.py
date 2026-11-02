@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
-from servicepulse.database import engine
+from servicepulse.database import backup_database, engine
 from servicepulse.faults import read_faults
 from servicepulse.measurements import inventory, time_bounds
 from servicepulse.models import Action, Audit, Category, Device, MeasurementFile, Report, Source
@@ -266,13 +266,16 @@ def add_device(
         raise ValueError("Diese Geräte-ID ist bereits registriert.") from exc
 
 
-def reports_frame(db: Engine | None = None, originals: bool = False) -> pd.DataFrame:
+def reports_frame(
+    db: Engine | None = None, originals: bool = False, *, archived: bool = False
+) -> pd.DataFrame:
     """Liefert aktuelle Berichte oder erhaltene Forschungsoriginale mit stabilen Spalten."""
     with Session(db or engine()) as session:
         rows = session.execute(
             select(Report, Category.code, Source.name)
             .join(Category, Report.category_id == Category.id)
             .join(Source, Report.source_id == Source.id)
+            .where(Report.archived.is_(archived))
             .order_by(Report.id)
         ).all()
         actions = {r.report_id: r.text for r in session.scalars(select(Action))}
@@ -295,6 +298,7 @@ def reports_frame(db: Engine | None = None, originals: bool = False) -> pd.DataF
                 component=report.component,
                 action=actions.get(report.id, ""),
                 notes=report.notes,
+                archived=report.archived,
                 source_file=source_name,
                 source_sheet=report.source_sheet,
                 source_row=report.source_row,
@@ -338,6 +342,7 @@ def reports_frame(db: Engine | None = None, originals: bool = False) -> pd.DataF
                 "action",
                 "component",
                 "notes",
+                "archived",
                 "category_raw",
                 "freezer_id",
                 "registered_date",
@@ -384,6 +389,10 @@ def save_report(
                 key = "manual:" + str(request_key or uuid.uuid4())
                 existing = session.scalar(select(Report).where(Report.import_key == key))
                 if existing:
+                    if existing.archived:
+                        raise ValueError(
+                            "Dieser Bericht ist archiviert. Bitte zuerst wiederherstellen."
+                        )
                     return existing.id
                 origin = Source(
                     kind="manual", name=data["source"].strip(), details={"entered_locally": True}
@@ -401,6 +410,10 @@ def save_report(
                 report = session.get(Report, int(report_id))
                 if report is None:
                     raise ValueError("Bericht wurde nicht gefunden.")
+                if report.archived:
+                    raise ValueError(
+                        "Archivierte Berichte sind schreibgeschützt. Bitte zuerst wiederherstellen."
+                    )
                 if report.version != expected_version:
                     raise ValueError(
                         "Der Bericht wurde inzwischen geändert. Bitte neu laden, bevor du erneut speicherst."
@@ -425,6 +438,86 @@ def save_report(
         return result
     except StaleDataError as exc:
         raise ValueError("Gleichzeitige Änderung erkannt. Bitte neu laden.") from exc
+
+
+def _change_archive_status(
+    report_id: int,
+    archived: bool,
+    expected_version: int,
+    *,
+    confirmed: bool,
+    reason: str,
+    actor: str,
+    db: Engine | None,
+) -> Path:
+    """Sicherung, Versionsprüfung und Audit innerhalb eines serialisierten Schreibvorgangs."""
+    if confirmed is not True:
+        raise ValueError("Bitte die Archivierung oder Wiederherstellung ausdrücklich bestätigen.")
+    if not reason.strip():
+        raise ValueError("Bitte einen Grund angeben.")
+    selected_db = db if db is not None else engine()
+    try:
+        with Session(selected_db) as session, session.begin():
+            session.execute(text("SELECT pg_advisory_xact_lock(73210646)"))
+            report = session.get(Report, int(report_id))
+            if report is None:
+                raise ValueError("Bericht wurde nicht gefunden.")
+            if report.origin != "manual":
+                raise ValueError(
+                    "Forschungsberichte sind geschützt. Nur eigene Berichte dürfen archiviert werden."
+                )
+            if report.version != expected_version:
+                raise ValueError("Der Bericht wurde inzwischen geändert. Bitte neu laden.")
+            if report.archived == archived:
+                raise ValueError(
+                    "Der Bericht besitzt diesen Archivstatus bereits. Bitte neu laden."
+                )
+            # Vor dem UPDATE; pg_dump liest einen konsistenten Stand. Andere
+            # Anwendungsschreibvorgänge warten solange auf denselben Advisory-Lock.
+            saved_backup = backup_database(selected_db)
+            action = session.scalar(select(Action.text).where(Action.report_id == report.id)) or ""
+            operation = "Archiviert" if archived else "Wiederhergestellt"
+            context(
+                session,
+                actor.strip() or "Lokale Bedienung",
+                f"{operation}: {reason.strip()} · Sicherung: {saved_backup.name}",
+                action,
+            )
+            report.archived = archived
+            report.version += 1
+        return saved_backup
+    except StaleDataError as exc:
+        raise ValueError("Gleichzeitige Änderung erkannt. Bitte neu laden.") from exc
+
+
+def archive_report(
+    report_id: int,
+    expected_version: int,
+    *,
+    confirmed: bool = False,
+    reason: str = "",
+    actor: str = "",
+    db: Engine | None = None,
+) -> Path:
+    """Archiviert ausschließlich eigene Berichte nach Bestätigung und verifizierter Sicherung."""
+    return _change_archive_status(
+        report_id, True, expected_version, confirmed=confirmed, reason=reason, actor=actor, db=db
+    )
+
+
+def restore_report(
+    report_id: int,
+    expected_version: int,
+    *,
+    confirmed: bool = False,
+    reason: str = "",
+    actor: str = "",
+    db: Engine | None = None,
+) -> Path:
+    """Stellt einen eigenen archivierten Bericht mit Sicherung und neuer Auditversion wieder her."""
+    return _change_archive_status(
+        report_id, False, expected_version, confirmed=confirmed, reason=reason, actor=actor, db=db
+    )
 
 
 def history(report_id: int, db: Engine | None = None) -> list[dict[str, Any]]:

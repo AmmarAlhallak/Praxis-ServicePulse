@@ -636,3 +636,335 @@ def test_normal_start_only_checks_schema_without_maintenance(database, monkeypat
     )
     with pytest.raises(RuntimeError, match="Migration"):
         startup.start_existing()
+
+
+def test_archive_restore_filters_audit_and_backups(database):
+    originals = repo.reports_frame(database, True)
+    base = repo.reports_frame(database)
+    rid = repo.save_report(data(), db=database)
+    full = repo.reports_frame(database)
+    archive_backup = repo.archive_report(
+        rid, 1, confirmed=True, reason="Testarchivierung", actor="pytest", db=database
+    )
+    assert archive_backup.exists() and archive_backup.stat().st_size > 0
+    assert archive_backup.name.startswith(database.url.database + "_")
+    pd.testing.assert_frame_equal(base, repo.reports_frame(database))
+    archived = repo.reports_frame(database, archived=True)
+    assert archived.report_id.tolist() == [rid] and archived.archived.all()
+    with database.connect() as c:
+        assert (
+            c.execute(
+                text("SELECT count(*) FROM service_actions WHERE report_id=:id"), {"id": rid}
+            ).scalar()
+            == 1
+        )
+        assert (
+            c.execute(
+                text(
+                    "SELECT count(*) FROM sources WHERE id=(SELECT source_id FROM service_reports WHERE id=:id)"
+                ),
+                {"id": rid},
+            ).scalar()
+            == 1
+        )
+    log = repo.history(rid, database)
+    assert len(log) == 2 and log[-1]["Bearbeiter"] == "pytest"
+    assert log[-1]["Vorher"]["archived"] is False and log[-1]["Nachher"]["archived"] is True
+    assert log[-1]["Nachher"]["action"] == "Testmaßnahme"
+    assert "Archiviert:" in log[-1]["Grund"] and archive_backup.name in log[-1]["Grund"]
+    restore_backup = repo.restore_report(
+        rid, 2, confirmed=True, reason="Testwiederherstellung", actor="pytest", db=database
+    )
+    assert restore_backup.exists() and restore_backup != archive_backup
+    assert repo.reports_frame(database, archived=True).empty
+    restored = repo.reports_frame(database)
+    pd.testing.assert_frame_equal(
+        full.drop(columns="report_version"), restored.drop(columns="report_version")
+    )
+    log = repo.history(rid, database)
+    assert len(log) == 3 and log[-1]["Nachher"]["archived"] is False
+    assert log[-1]["Vorher"]["archived"] is True and "Wiederhergestellt:" in log[-1]["Grund"]
+    pd.testing.assert_frame_equal(originals, repo.reports_frame(database, True))
+
+
+def test_archive_confirmation_research_and_sql_protection(database, monkeypatch):
+    before = repo.reports_frame(database)
+    rid = int(before.report_id.iloc[0])
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Invalid requests must not reach backup")
+
+    monkeypatch.setattr(repo, "backup_database", forbidden)
+    with pytest.raises(ValueError, match="bestätigen"):
+        repo.archive_report(rid, 1, reason="Test", db=database)
+    for change in [repo.archive_report, repo.restore_report]:
+        with pytest.raises(ValueError, match="Forschungsberichte"):
+            change(rid, 1, confirmed=True, reason="Test", db=database)
+    with pytest.raises(DBAPIError):
+        with database.begin() as c:
+            c.execute(
+                text("UPDATE service_reports SET archived=true,version=version+1 WHERE id=:id"),
+                {"id": rid},
+            )
+    pd.testing.assert_frame_equal(before, repo.reports_frame(database))
+    assert len(repo.history(rid, database)) == 1
+
+
+@pytest.mark.parametrize("restore", [False, True])
+def test_failed_backup_prevents_archive_change(database, monkeypatch, restore):
+    rid = repo.save_report(data(), db=database)
+    if restore:
+        repo.archive_report(rid, 1, confirmed=True, reason="Vorbereitung im Test", db=database)
+    expected = 2 if restore else 1
+    before = repo.reports_frame(database, archived=restore)
+    history = repo.history(rid, database)
+
+    def failed(*args, **kwargs):
+        raise RuntimeError("Sicherung fehlgeschlagen")
+
+    monkeypatch.setattr(repo, "backup_database", failed)
+    change = repo.restore_report if restore else repo.archive_report
+    with pytest.raises(RuntimeError, match="Sicherung"):
+        change(rid, expected, confirmed=True, reason="Test", db=database)
+    pd.testing.assert_frame_equal(before, repo.reports_frame(database, archived=restore))
+    assert repo.history(rid, database) == history
+
+
+def test_archived_reports_readonly_and_version_conflicts(database):
+    rid = repo.save_report(data(), db=database)
+    with pytest.raises(ValueError, match="inzwischen geändert"):
+        repo.archive_report(rid, 0, confirmed=True, reason="Test", db=database)
+    with pytest.raises(ValueError, match="Grund"):
+        repo.archive_report(rid, 1, confirmed=True, db=database)
+    repo.archive_report(rid, 1, confirmed=True, reason="Test", db=database)
+    with pytest.raises(ValueError, match="schreibgeschützt"):
+        repo.save_report(data(), rid, 2, db=database)
+    with pytest.raises(ValueError, match="bereits"):
+        repo.archive_report(rid, 2, confirmed=True, reason="Test", db=database)
+    with pytest.raises(ValueError, match="inzwischen geändert"):
+        repo.restore_report(rid, 1, confirmed=True, reason="Test", db=database)
+    for sql_text in [
+        "UPDATE service_reports SET description='tampered',version=version+1 WHERE id=:id",
+        "UPDATE service_reports SET archived=false,description='tampered',version=version+1 WHERE id=:id",
+    ]:
+        with pytest.raises(DBAPIError):
+            with database.begin() as c:
+                c.execute(text(sql_text), {"id": rid})
+    assert len(repo.history(rid, database)) == 2
+    assert len(repo.reports_frame(database, archived=True)) == 1
+
+
+def test_archive_ui_confirmation_statistics_and_restore(database, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    rid = repo.save_report(data(), db=database)
+    original = repo.reports_frame(database, True)
+    monkeypatch.setattr(repo, "engine", lambda: database)
+    app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+    assert not app.exception and app.metric[0].value == "47"
+    app.button(key="open_edit_report_806279").click().run()
+    # Forschungsberichte erhalten keinen Archivierungsknopf.
+    assert not any(button.label == "Bericht archivieren" for button in app.button)
+    app.selectbox(key="edit_report_806279").set_value(rid).run()
+    app.button(key=f"open_archivieren_{rid}_1").click().run()
+    next(b for b in app.button if b.label == "Archivierung bestätigen").click().run()
+    assert app.error and app.metric[0].value == "47"
+    assert not repo.reports_frame(database).archived.any()
+    app.text_input(key=f"reason_archivieren_{rid}_1").set_value("UI-Testarchivierung")
+    app.checkbox(key=f"confirmed_archivieren_{rid}_1").check()
+    next(b for b in app.button if b.label == "Archivierung bestätigen").click().run()
+    assert not app.exception and not app.error and app.metric[0].value == "46"
+    assert app.selectbox(key="archived_report").value == rid
+    app.button(key="open_edit_report_806279").click().run()
+    assert rid not in repo.reports_frame(database).report_id.tolist()
+    assert not any(
+        "Bericht " + str(rid) + " ·" in option
+        for option in app.selectbox(key="edit_report_806279").options
+    )
+    app.button(key=f"open_wiederherstellen_{rid}_2").click().run()
+    app.text_input(key=f"reason_wiederherstellen_{rid}_2").set_value("UI-Testwiederherstellung")
+    app.checkbox(key=f"confirmed_wiederherstellen_{rid}_2").check()
+    next(b for b in app.button if b.label == "Wiederherstellung bestätigen").click().run()
+    assert not app.exception and not app.error and app.metric[0].value == "47"
+    assert repo.reports_frame(database, archived=True).empty
+    assert len(repo.history(rid, database)) == 3
+    pd.testing.assert_frame_equal(original, repo.reports_frame(database, True))
+
+
+def test_archive_backup_can_restore_prechange_state(database, test_cluster, tmp_path):
+    import os
+
+    from scripts.prepare_database import run
+
+    settings, _ = test_cluster
+    rid = repo.save_report(data(), db=database)
+    backup = repo.archive_report(
+        rid, 1, confirmed=True, reason="Sicherungswiederherstellung prüfen", db=database
+    )
+    name = "servicepulse_archive_restore_" + uuid.uuid4().hex
+    args = dict(
+        host="127.0.0.1",
+        port=settings["port"],
+        dbname="postgres",
+        user="servicepulse_owner",
+        password=settings["admin_password"],
+        autocommit=True,
+    )
+    with psycopg.connect(**args) as c:
+        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+    restored = create_engine(connection_url(settings, True, database=name), hide_parameters=True)
+    try:
+        run(
+            Path(settings["bin"]) / "pg_restore.exe",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            settings["port"],
+            "-U",
+            "servicepulse_owner",
+            "-d",
+            name,
+            "--exit-on-error",
+            backup,
+            env={**os.environ, "PGPASSWORD": settings["admin_password"]},
+        )
+        assert len(repo.reports_frame(restored)) == 47
+        assert repo.reports_frame(restored, archived=True).empty
+        assert len(repo.history(rid, restored)) == 1
+    finally:
+        restored.dispose()
+        with psycopg.connect(**args) as c:
+            c.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
+
+
+def test_archive_works_with_restricted_application_role(database, test_cluster):
+    settings, _ = test_cluster
+    with database.begin() as c:
+        c.execute(text("GRANT USAGE ON SCHEMA public TO servicepulse_app"))
+        c.execute(
+            text(
+                "GRANT SELECT,INSERT,UPDATE ON devices,categories,sources,service_reports,service_actions,measurement_files TO servicepulse_app"
+            )
+        )
+        c.execute(text("GRANT SELECT,INSERT ON audit_log TO servicepulse_app"))
+        c.execute(text("GRANT SELECT ON alembic_version TO servicepulse_app"))
+        c.execute(text("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO servicepulse_app"))
+    app = create_engine(
+        connection_url(settings, database=database.url.database), hide_parameters=True
+    )
+    try:
+        rid = repo.save_report(data(), db=app)
+        repo.archive_report(rid, 1, confirmed=True, reason="App-Rollentest", db=app)
+        repo.restore_report(rid, 2, confirmed=True, reason="App-Rollentest", db=app)
+        assert len(repo.history(rid, app)) == 3
+        with pytest.raises(DBAPIError):
+            with app.begin() as c:
+                c.execute(text("DELETE FROM service_reports WHERE id=:id"), {"id": rid})
+    finally:
+        app.dispose()
+
+
+def test_archive_competes_safely_with_edit(database):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    rid = repo.save_report(data(), db=database)
+    ready = Barrier(2)
+
+    def change(kind):
+        ready.wait(timeout=10)
+        try:
+            if kind == "archive":
+                repo.archive_report(rid, 1, confirmed=True, reason="Paralleltest", db=database)
+            else:
+                values = data()
+                values["description"] = "Parallele Teständerung"
+                repo.save_report(values, rid, 1, db=database)
+            return "saved"
+        except ValueError:
+            return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(change, ["archive", "edit"])) == ["conflict", "saved"]
+    assert len(repo.history(rid, database)) == 2
+    with database.connect() as c:
+        assert (
+            c.execute(
+                text("SELECT version FROM service_reports WHERE id=:id"), {"id": rid}
+            ).scalar()
+            == 2
+        )
+
+
+def test_archive_database_failure_rolls_back(database):
+    rid = repo.save_report(data(), db=database)
+    with database.begin() as c:
+        c.execute(
+            text("ALTER TABLE service_reports ADD CONSTRAINT test_no_archive CHECK (NOT archived)")
+        )
+    try:
+        with pytest.raises(DBAPIError):
+            repo.archive_report(rid, 1, confirmed=True, reason="Rollback-Test", db=database)
+        assert len(repo.reports_frame(database)) == 47
+        assert repo.reports_frame(database, archived=True).empty
+        assert len(repo.history(rid, database)) == 1
+    finally:
+        with database.begin() as c:
+            c.execute(text("ALTER TABLE service_reports DROP CONSTRAINT test_no_archive"))
+
+
+def test_upgrade_existing_0003_preserves_reports_and_audit(test_cluster):
+    from alembic import command
+    from alembic.config import Config
+
+    from servicepulse.database import backup_database
+
+    settings, _ = test_cluster
+    name = "servicepulse_migration_test_" + uuid.uuid4().hex
+    args = dict(
+        host="127.0.0.1",
+        port=settings["port"],
+        dbname="postgres",
+        user="servicepulse_owner",
+        password=settings["admin_password"],
+        autocommit=True,
+    )
+    with psycopg.connect(**args) as c:
+        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+    legacy = create_engine(connection_url(settings, True, database=name), hide_parameters=True)
+    try:
+        cfg = Config(str(ROOT / "alembic.ini"))
+        with legacy.begin() as c:
+            cfg.attributes["connection"] = c
+            command.upgrade(cfg, "0003")
+            c.execute(
+                text("INSERT INTO devices (id,name,model,location) VALUES ('999993','','','')")
+            )
+            c.execute(text("INSERT INTO categories (id,code) VALUES (1,'Legacy')"))
+            c.execute(
+                text(
+                    "INSERT INTO sources (id,kind,name,details) VALUES (1,'manual','Migrationstest','{}'::jsonb)"
+                )
+            )
+            c.execute(
+                text(
+                    "INSERT INTO service_reports (device_id,category_id,source_id,description,component,status,notes,origin,import_key,version) VALUES ('999993',1,1,'Legacy-Bericht','','offen','','manual','manual:legacy',1)"
+                )
+            )
+        with legacy.connect() as c:
+            before_report = c.execute(text("SELECT to_jsonb(t) FROM service_reports t")).scalar()
+            before_audit = c.execute(text("SELECT to_jsonb(t) FROM audit_log t")).scalar()
+        snapshot = backup_database(legacy)
+        assert snapshot.exists()
+        migrate(legacy)
+        with legacy.connect() as c:
+            after_report = c.execute(text("SELECT to_jsonb(t) FROM service_reports t")).scalar()
+            assert after_report.pop("archived") is False
+            assert before_report == after_report
+            assert before_audit == c.execute(text("SELECT to_jsonb(t) FROM audit_log t")).scalar()
+            assert c.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0004"
+        assert len(repo.reports_frame(legacy)) == 1
+    finally:
+        legacy.dispose()
+        with psycopg.connect(**args) as c:
+            c.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))

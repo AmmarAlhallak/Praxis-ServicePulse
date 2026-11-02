@@ -10,7 +10,7 @@ Stand 30.10.2026. Weiterentwicklung des bestehenden Projekts.
 | `servicepulse/database.py` | SQLAlchemy-Verbindung aus lokalem Geheimnis |
 | `servicepulse/models.py` | Tabellen, Beziehungen und Versionsprüfung |
 | `servicepulse/repository.py` | Erstimport, PostgreSQL-Abfragen, Transaktionen, Geräte und Dateiregister |
-| `migrations/versions/0001…0003` | Alembic-Schemaänderungen, Herkunftsschutz, Audit, veröffentlichte Dateiduplikate |
+| `migrations/versions/0001…0004` | Alembic-Schemaänderungen, Herkunftsschutz, Audit, veröffentlichte Dateiduplikate |
 | `scripts/prepare_database.py` | Normalstart prüfen; Erstvorbereitung, Migration, Synchronisation und Dump ausdrücklich getrennt |
 | `servicepulse/faults.py` | Excel-Referenz lesen, Kennzahlen, Quellen- und Kontrollblattvergleich |
 | `servicepulse/measurements.py` | Begrenzte DuckDB-Parquet-Abfragen und Qualitätsprüfung |
@@ -67,3 +67,7 @@ Wissenschaftliche Daten und Autorenannotationen stammen aus Huang et al. (2023).
 Die veröffentlichten Ereignisdateien 806267/806281 sind byteidentisch. Beide Originalzuordnungen bleiben als prüfbedürftiger Quellenbefund erhalten. Neue identische Uploads werden abgewiesen. Eine sechsstellige ID im Dateinamen beweist allein noch nicht die tatsächliche Geräteidentität.
 
 Technische Referenzen: [SQLAlchemy-Versionierung](https://docs.sqlalchemy.org/en/20/orm/versioning.html), [Alembic](https://alembic.sqlalchemy.org/en/latest/tutorial.html), [PostgreSQL initdb](https://www.postgresql.org/docs/17/app-initdb.html).
+
+## Eigene Berichte archivieren
+
+`service_reports.archived` kennzeichnet ausschließlich eigene Berichte. Standardabfragen liefern nur aktive Berichte; die Archivansicht fragt gezielt `archived=true` ab. Archivieren und Wiederherstellen verlangen Bestätigung, Grund und passende Berichtsversion. Vor jeder Aktion wird die betroffene Datenbank gesichert. Beide Aktionen erhöhen die Version und erhalten Audit-Snapshots samt Sicherungsdateiname. Forschungsberichte sind zusätzlich durch eine PostgreSQL-Constraint geschützt. Berichte, Maßnahmen, Quellen und alte Auditzeilen werden nicht gelöscht. Migration 0004 setzt bestehende Berichte ausschließlich auf `archived=false`.

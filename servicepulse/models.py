@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -63,10 +65,12 @@ class Report(Base):
     original: Mapped[dict | None] = mapped_column(JSONB)
     import_key: Mapped[str] = mapped_column(String(200), unique=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __mapper_args__ = {"version_id_col": version}
     __table_args__ = (
         CheckConstraint("origin IN ('research','manual')", name="report_origin"),
+        CheckConstraint("NOT archived OR origin = 'manual'", name="only_manual_reports_archived"),
         CheckConstraint(
             "status IN ('offen','in Bearbeitung','abgeschlossen','nicht angegeben')",
             name="report_status",
