@@ -135,6 +135,7 @@ def ci_application_database(postgres_instance):
     try:
         migrate(db)
         repo.import_research(ROOT, db)
+        repo.sync_measurements(ROOT, db)
         yield db
     finally:
         db.dispose()

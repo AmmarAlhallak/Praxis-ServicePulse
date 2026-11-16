@@ -2,6 +2,8 @@
 
 Deutschsprachige lokale Verwaltung und Analyse von Kälteanlagen. Weiterentwicklung des bestehenden Praxisphasen-Prototyps; keine automatische Ausfallprognose.
 
+Zum Einstieg: [Arbeitsstand der Praxisphase](docs/praxisphase_arbeitsstand.md) mit den App-Änderungen, den drei eigenen Untersuchungen und ihren Ergebnissen.
+
 ## Start unter Windows
 
 `start.cmd` doppelt anklicken oder `ServicePulse.code-workspace` in VS Code öffnen und F5 drücken. Der normale Start prüft PostgreSQL und die Schemaversion, anschließend startet das Dashboard auf http://127.0.0.1:8501 . Nur eine Dashboardinstanz auf diesem Port verwenden. Der Start führt keinen erneuten Import, keine Migration und kein Backup aus. Auf einem noch nicht vorbereiteten Rechner wird einmalig die Erstvorbereitung aufgerufen.

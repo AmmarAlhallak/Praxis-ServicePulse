@@ -96,22 +96,32 @@ def test_incomplete_reversed_and_reset_dates_in_ui():
 
 
 @pytest.mark.local_data
-def test_demonstration_buttons_select_real_cases_and_do_not_change_service_filters():
+def test_case_shortcuts_preserve_service_filters():
     for device in ["806279", "806030", "806031"]:
         if not (ROOT / f"data/raw/Revco/{device}_temp.parquet").exists():
             pytest.skip("Optionale reale Fall-Messdatei fehlt")
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
     app.checkbox(key="all_devices").uncheck().run()
     assert app.metric[0].value == "0"
+    assert app.button(key="demo_temperature").label == "Temperaturveränderung"
+    assert not any(item.label == "Messdatei und Herkunft" for item in app.expander)
+    assert not any("Die farbige Fläche markiert" in item.value for item in app.info)
+    assert app.button(key="demo_gap").label == "Messlücke"
+    assert app.button(key="demo_conflict").label == "Datumswiderspruch"
     app.button(key="demo_gap").click().run()
     assert not app.exception and not app.error
+    assert app.button(key="demo_gap").proto.type == "primary"
+    assert app.button(key="demo_temperature").proto.type == "secondary"
     assert app.selectbox(key="measurement_device").value == "806030"
-    assert app.selectbox(key="managed_device").value == "806030"
     assert app.metric[0].value == "0"
     coverage = next(t.value for t in app.dataframe if "Stunden ohne Messpunkte" in t.value.columns)
     assert coverage["Gültige Messpunkte"].tolist() == [0, 24, 0]
     assert coverage["Stunden ohne Messpunkte"].tolist() == [168, 22, 168]
     app.button(key="demo_conflict").click().run()
+    assert app.button(key="demo_conflict").proto.type == "primary"
+    assert app.button(key="demo_gap").proto.type == "secondary"
+    assert app.selectbox(key="measurement_device").value == "806031"
+    assert app.metric[0].value == "0"
     assert not app.exception and any("Datumswiderspruch" in w.value for w in app.warning)
     app.button(key="demo_temperature").click().run()
     assert not app.exception and not app.error
@@ -121,6 +131,9 @@ def test_demonstration_buttons_select_real_cases_and_do_not_change_service_filte
     coverage = next(t.value for t in app.dataframe if "Stunden ohne Messpunkte" in t.value.columns)
     assert coverage["Gültige Messpunkte"].tolist() == [2869, 1440, 10075]
     assert coverage["Stunden mit Messpunkten"].tolist() == [49, 24, 168]
+    app.selectbox(key="measurement_device").set_value("806030").run()
+    assert app.button(key="demo_temperature").proto.type == "secondary"
+    assert app.button(key="demo_gap").proto.type == "secondary"
 
 
 @pytest.mark.local_data

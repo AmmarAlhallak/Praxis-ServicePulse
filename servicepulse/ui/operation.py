@@ -38,6 +38,9 @@ def render_operation(
 ) -> None:
     """Zeigt vorhandene Messdaten und Vergleiche ohne Lückenfüllung."""
 
+    def clear_demo():
+        st.session_state.pop("active_operation_demo", None)
+
     def choose_demo(code):
         selected_device, selected_date, _ = DEMO_CASES[code]
         matching = df[
@@ -45,6 +48,7 @@ def render_operation(
         ]
         if matching.empty:
             return
+        st.session_state["active_operation_demo"] = code
         st.session_state["measurement_device"] = selected_device
         st.session_state[f"service_day_{selected_device}"] = matching.index[0]
         st.session_state[f"measure_{selected_device}"] = "RTD"
@@ -56,21 +60,28 @@ def render_operation(
 
     st.subheader("Den Servicetag im Betrieb betrachten")
     temperatures = files[files.kind.eq("temp")]
+    devices_with_temperature = set(temperatures.device_id)
+    active_demo = st.session_state.get("active_operation_demo")
     for area, (code, (example_device, example_date, example_label)) in zip(
-        st.columns(3), DEMO_CASES.items()
+        st.columns(len(DEMO_CASES)), DEMO_CASES.items()
     ):
-        available = not df[
-            df.device_id.eq(example_device) & df.event_date.eq(pd.Timestamp(example_date))
-        ].empty and example_device in set(temperatures.device_id)
+        available = (
+            example_device in devices_with_temperature
+            and (
+                df.device_id.eq(example_device) & df.event_date.eq(pd.Timestamp(example_date))
+            ).any()
+        )
         area.button(
-            f"Beispiel: {example_label}",
+            example_label,
             key=f"demo_{code}",
             on_click=choose_demo,
             args=(code,),
             disabled=not available,
-            type="primary" if code == "temperature" else "secondary",
+            type="primary"
+            if code == active_demo and st.session_state.get("measurement_device") == example_device
+            else "secondary",
             width="stretch",
-            help=f"Gerät {example_device}, {pd.Timestamp(example_date):%d.%m.%Y}, Kammertemperatur und sieben Tage je Vergleichsfenster. Verwendet die gesamte Servicequelle, ohne die Servicefilter links zu ändern.",
+            help=f"Gerät {example_device}, {pd.Timestamp(example_date):%d.%m.%Y}, Kammertemperatur und sieben Tage je Vergleichsfenster.",
         )
     if temperatures.empty:
         st.info(
@@ -84,6 +95,7 @@ def render_operation(
             options,
             index=options.index(preferred),
             key="measurement_device",
+            on_change=clear_demo,
             help="Die Geräte-ID bleibt die eindeutige Kennung. Hier sind alle Geräte mit Messdaten verfügbar, auch ohne Serviceeintrag.",
         )
         matches = temperatures[temperatures.device_id.eq(device)]
@@ -92,23 +104,18 @@ def render_operation(
                 "Für dieses Gerät sind keine Temperaturmessdaten vorhanden. Ein neuer Servicebericht erzeugt keine Sensordaten."
             )
         else:
-            file_details = st.expander("Messdatei und Herkunft")
-            with file_details:
+            # Bei eindeutiger Zuordnung ist keine technische Dateiauswahl nötig.
+            paths = matches.path.tolist()
+            if len(paths) == 1:
+                selected_path = paths[0]
+            else:
                 selected_path = st.selectbox(
                     "Messdatei auswählen",
-                    matches.path.tolist(),
+                    paths,
                     format_func=lambda p: Path(p).name,
                     key=f"measurement_file_{device}",
                 )
-                st.code(selected_path, language=None)
-                st.caption(
-                    "Veröffentlichte Temperaturdaten sind bereits nach Autorenmethode zeitkorrigiert. Originalfelder und Bitcodes bleiben in der Datei erhalten."
-                )
-                linked = st.checkbox(
-                    "Servicefilter links auch auf Fallliste und Markierungen anwenden",
-                    value=False,
-                    key="link_service_filters",
-                )
+            linked = False
             path = Path(selected_path)
             numeric = numeric_columns(path)
             case_source = filtered if linked else df
@@ -120,6 +127,7 @@ def render_operation(
                 ["Rund um einen Servicetag", "Freier Zeitraum"],
                 horizontal=True,
                 key="period_mode",
+                on_change=clear_demo,
             )
             chosen_date = None
             if mode == "Rund um einen Servicetag" and (not candidates.empty):
@@ -133,20 +141,12 @@ def render_operation(
                         f"{df.loc[i, 'event_date']:%d.%m.%Y} · {category_label(df.loc[i, 'category'])}"
                     ),
                     key=f"service_day_{device}",
+                    on_change=clear_demo,
                 )
                 chosen_date = df.loc[row_id, "event_date"]
                 st.write(
                     f"Dokumentierter Anlass: {(fault_label(df.loc[row_id, 'fault_text']) if df.loc[row_id, 'origin'] == 'research' else df.loc[row_id, 'fault_text'])} · Geräte-ID {device}"
                 )
-                with file_details:
-                    st.caption(
-                        f"Quelle: {df.loc[row_id, 'source_file']} · Bericht {int(df.loc[row_id, 'report_id'])}. "
-                        + (
-                            f"Original-Excel-Zeile {int(df.loc[row_id, 'source_row'])}."
-                            if df.loc[row_id, "origin"] == "research"
-                            else "Selbst erfasster Servicebericht."
-                        )
-                    )
                 measure = st.selectbox(
                     "3 · Messgröße wählen",
                     numeric,
@@ -270,9 +270,6 @@ def render_operation(
                             st.write(
                                 f"Tatsächlich gemessen: {int(warm.rows)} Werte über +15 °C, von {warm.first_time:%d.%m.%Y %H:%M} bis {warm.last_time:%d.%m.%Y %H:%M}; höchster Wert {german_number(warm.maximum, 2)} °C. Das anschließende Abkühlen ist beobachtbar; eine Ursache ist damit nicht bewiesen."
                             )
-                    st.info(
-                        "Die farbige Fläche markiert den dokumentierten Servicetag – keinen nachgewiesenen Fehlerbeginn. Ein Unterschied vor und nach diesem Tag beweist keine Reparaturwirkung."
-                    )
                     if chosen_date is not None:
                         comparison = window_comparison(path, measure, chosen_date, days)
                         day = serviceday_summary(path, measure, chosen_date)
